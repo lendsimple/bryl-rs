@@ -6,11 +6,12 @@ use bon::Builder;
 use bryl::{EncodeCx, Record, Sanitize};
 use chrono::{NaiveDate, NaiveDateTime, Utc};
 
-use crate::codes::{ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
 use crate::entry::Entry;
 use crate::error::Error;
 use crate::records::{
     Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader,
+    ReturnAddendum,
 };
 use crate::totals::Totals;
 use crate::types::{FileIdModifier, RoutingNumber};
@@ -182,7 +183,8 @@ pub struct BatchParams {
 }
 
 /// Entry detail values. Each string in `addenda` becomes an addendum's
-/// payment related information.
+/// payment related information; a return entry sets `return_addendum`
+/// instead.
 #[derive(Builder, Debug, Clone, PartialEq, Eq)]
 #[builder(on(String, into))]
 pub struct EntryParams {
@@ -206,6 +208,26 @@ pub struct EntryParams {
     /// Payment related information, one addendum each.
     #[builder(default)]
     pub addenda: Vec<String>,
+    /// For a return entry, its type-99 addendum.
+    pub return_addendum: Option<ReturnParams>,
+}
+
+/// Return addendum values. The addendum's trace number is the return entry's.
+#[derive(Builder, Debug, Clone, PartialEq, Eq)]
+#[builder(on(String, into))]
+pub struct ReturnParams {
+    /// Why the entry is returned.
+    pub return_reason_code: ReturnReasonCode,
+    /// Trace number of the entry being returned.
+    pub original_entry_trace_number: u64,
+    /// Only for R14 and R15.
+    pub date_of_death: Option<NaiveDate>,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    pub original_receiving_dfi_id: u32,
+    /// Free-form information.
+    #[builder(default)]
+    pub addenda_information: String,
 }
 
 impl<W: Write> Writer<W> {
@@ -417,7 +439,8 @@ impl<W: Write> BatchWriter<'_, '_, W> {
     /// Writes an entry and its addenda, and returns them.
     ///
     /// The entry is checked against the batch (service class, debit/credit
-    /// rules of the SEC code, prenote amount, addenda limits) and fully
+    /// rules of the SEC code, prenote amount, addenda limits, return rules)
+    /// and fully
     /// encoded before anything is written, so a rejected entry leaves the
     /// output unchanged.
     ///
@@ -441,7 +464,9 @@ impl<W: Write> BatchWriter<'_, '_, W> {
             .individual_id(params.individual_id)
             .individual_name(params.individual_name)
             .discretionary_data(params.discretionary_data)
-            .addenda_record_indicator(u8::from(!params.addenda.is_empty()))
+            .addenda_record_indicator(u8::from(
+                !params.addenda.is_empty() || params.return_addendum.is_some(),
+            ))
             .trace_number(trace_number)
             .build();
         let addenda = params
@@ -456,7 +481,21 @@ impl<W: Write> BatchWriter<'_, '_, W> {
                     .build()
             })
             .collect();
-        let entry = Entry { detail, addenda };
+        let return_addendum = params.return_addendum.map(|params| {
+            ReturnAddendum::builder()
+                .return_reason_code(params.return_reason_code)
+                .original_entry_trace_number(params.original_entry_trace_number)
+                .maybe_date_of_death(params.date_of_death)
+                .original_receiving_dfi_id(params.original_receiving_dfi_id)
+                .addenda_information(params.addenda_information)
+                .trace_number(detail.trace_number)
+                .build()
+        });
+        let entry = Entry {
+            detail,
+            addenda,
+            return_addendum,
+        };
         if let Some(issue) = entry_issues(&self.header, &entry).into_iter().next() {
             return Err(Error::InvalidEntry(issue));
         }
@@ -466,7 +505,10 @@ impl<W: Write> BatchWriter<'_, '_, W> {
         for addendum in &entry.addenda {
             self.file.encode(addendum, &mut buf)?;
         }
-        let records = u32::try_from(entry.addenda.len() + 1).unwrap_or(u32::MAX);
+        if let Some(addendum) = &entry.return_addendum {
+            self.file.encode(addendum, &mut buf)?;
+        }
+        let records = u32::try_from(entry.addenda_count() + 1).unwrap_or(u32::MAX);
         self.file.emit(&buf, records)?;
         self.file.next_trace_sequence += 1;
         self.totals.add_entry(&entry);

@@ -126,6 +126,9 @@
 //! - **Entry descriptions.** ENR batches must be described `AUTOENROLL` and
 //!   RCK batches `REDEPCHECK`.
 //! - **Prenotes** have a zero amount.
+//! - **Returns.** A return entry (transaction code x1 or x6) carries exactly
+//!   one [`ReturnAddendum`] whose trace number is its own, and no other
+//!   addenda; only R14 and R15 returns may give a date of death.
 //! - **Routing numbers** must pass the ABA checksum, which [`RoutingNumber`]
 //!   checks when it is created.
 //!
@@ -210,6 +213,53 @@
 //! with [`Reader::with_name`]) and the line, e.g.
 //! `ach.txt @ line 4 - unexpected record type FileControl, expected BatchControl`.
 //!
+//! # Returns
+//!
+//! A return entry has a "returned" transaction code (21, 26, 31 or 36) and a
+//! type-99 [`ReturnAddendum`] in [`Entry::return_addendum`] instead of
+//! type-05 addenda. It gives the [`ReturnReasonCode`] and the trace number
+//! of the entry being returned:
+//!
+//! ```
+//! # fn sample() -> Result<String, Box<dyn std::error::Error>> {
+//! #     use nacha::*;
+//! #     let created_at = chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap().and_hms_opt(9, 0, 0).unwrap();
+//! #     let mut writer = Writer::new(Vec::new());
+//! #     let mut file = writer.begin_file(FileParams::builder().immediate_destination("091000019".parse()?)
+//! #         .immediate_destination_name("ACME BANK").immediate_origin("0210000210").immediate_origin_name("RDFI")
+//! #         .created_at(created_at).build())?;
+//! #     let mut batch = file.begin_batch(BatchParams::builder().service_class_code(ServiceClassCode::DebitsOnly)
+//! #         .company_name("ACME").company_id("1234567890").standard_entry_class(StandardEntryClass::Ppd)
+//! #         .company_entry_description("LOAN PMT").originating_dfi_id(2_100_002).build())?;
+//! #     batch.entry(EntryParams::builder().transaction_code(TransactionCode::CheckingReturnedDebit)
+//! #         .receiving_dfi("091000019".parse()?).account_number("123").amount(2_500)
+//! #         .individual_id("LOAN0001").individual_name("JANE SMITH")
+//! #         .return_addendum(ReturnParams::builder().return_reason_code(ReturnReasonCode::InsufficientFunds)
+//! #             .original_entry_trace_number(91_000_010_000_001).original_receiving_dfi_id(2_100_002).build())
+//! #         .build())?;
+//! #     batch.finish()?;
+//! #     file.finish()?;
+//! #     Ok(String::from_utf8(writer.into_inner())?)
+//! # }
+//! # let returns = sample()?;
+//! use nacha::ReturnReasonCode;
+//!
+//! let file = nacha::File::read(returns.as_bytes())?;
+//! for entry in file.batches.iter().flat_map(|batch| &batch.entries) {
+//!     if let Some(returned) = &entry.return_addendum {
+//!         println!(
+//!             "{:015} returned: {}",
+//!             returned.original_entry_trace_number, returned.return_reason_code
+//!         );
+//!         assert_eq!(returned.return_reason_code, ReturnReasonCode::InsufficientFunds);
+//!     }
+//! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! To write a return, give [`EntryParams::return_addendum`] a
+//! [`ReturnParams`]; the writer fills in the addendum's trace number.
+//!
 //! # Configuration
 //!
 //! ```
@@ -242,11 +292,13 @@
 //!
 //! # Not supported
 //!
-//! - Addenda other than type 05: type 02 (MTE, POS, SHR), type 98
-//!   (notifications of change, COR) and type 99 (returns). Entries of these
-//!   classes cannot carry their required addenda, and reading a file that
-//!   contains them fails.
-//! - International entries (IAT) and their addenda types 10–18.
+//! - Type 02 addenda (MTE, POS, SHR) and type 98 addenda (notifications of
+//!   change, COR). Entries of these classes cannot carry their required
+//!   addenda, and reading a file that contains them fails.
+//! - Dishonored and contested dishonored returns (R61–R77), whose type-99
+//!   addenda use another layout; reading them fails.
+//! - International entries (IAT), their addenda types 10–18 and their
+//!   returns (R80–R85).
 //!
 //! # Sources
 //!
@@ -269,7 +321,14 @@
 //!   zero-amount prenotes, required filler, line endings, character sets.
 //! - [moov-io/ach](https://github.com/moov-io/ach) (`batch*.go`): addenda
 //!   limits for the other entry classes, debit- and credit-only entry classes,
-//!   and the `AUTOENROLL` and `REDEPCHECK` entry descriptions.
+//!   and the `AUTOENROLL` and `REDEPCHECK` entry descriptions;
+//!   (`addenda99.go`) the return addendum layout and the R90 return code.
+//! - [Personify's addenda record reference](https://resource1.personifycorp.com/PersonifyOnlineHelp/7.7.0/mergedProjects/eft/Addenda_Record.htm):
+//!   the return addendum layout, and the date of death used only with R14
+//!   and R15.
+//! - [Stripe's list of ACH return codes](https://stripe.com/resources/more/the-complete-list-of-ach-rejection-codes-why-they-happen-and-how-to-handle-them):
+//!   current return code titles, such as R11 (not in accordance with the
+//!   authorization) and R13 (invalid routing number).
 
 mod codes;
 mod entry;
@@ -284,20 +343,22 @@ mod writer;
 
 /// Text normalization applied when writing; see [`Writer::sanitize`].
 pub use bryl::Sanitize;
-pub use codes::{AccountKind, REVERSAL, ServiceClassCode, StandardEntryClass, TransactionCode};
+pub use codes::{
+    AccountKind, REVERSAL, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
+};
 pub use entry::Entry;
 pub use error::Error;
 pub use file::{Batch, File};
 pub use reader::{Entries, Reader};
 pub use records::{
     Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader, NachaRecord,
-    RECORD_LENGTH,
+    RECORD_LENGTH, ReturnAddendum,
 };
 pub use totals::{HASH_MODULUS, Totals};
 pub use types::{FileIdModifier, FileIdModifierError, RoutingNumber, RoutingNumberError};
 pub use validate::{Issue, IssueKind};
 pub use writer::{
-    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, Writer,
+    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, ReturnParams, Writer,
 };
 
 /// Runs the code in README.md as doctests.

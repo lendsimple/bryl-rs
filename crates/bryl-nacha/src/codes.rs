@@ -112,8 +112,9 @@ impl StandardEntryClass {
     /// - None for the other check conversion classes (ARC, BOC, POP, RCK,
     ///   TRC, XCK), and up to 9,999 for ATX and TRX (moov-io/ach).
     /// - None for ADV, which has no addenda, and for COR (type 98) and MTE,
-    ///   POS and SHR (type 02): this library only writes type-05 addenda, so
-    ///   entries of these classes cannot carry their required addenda.
+    ///   POS and SHR (type 02): this library writes only type-05 and return
+    ///   (type-99) addenda, so entries of these classes cannot carry their
+    ///   required addenda. Return entries carry no type-05 addenda at all.
     /// - One for everything else (CIE, ACK, DNE, ENR; PBR and CBR, replaced by
     ///   IAT, are not checked by moov-io).
     pub const fn max_addenda(self) -> u16 {
@@ -215,6 +216,183 @@ pub enum TransactionCode {
     /// `38`: savings debit prenote.
     #[code(38)]
     SavingsPrenoteDebit,
+}
+
+/// Return reason code, carried by a [`ReturnAddendum`](crate::ReturnAddendum).
+///
+/// Covers the return codes R01–R53 (titles as in NACHA's current return code
+/// table) and R90. Dishonored and contested dishonored returns (R61–R77) use
+/// a different addendum layout and international returns (R80–R85) need IAT,
+/// so neither is supported; reading a file that contains them fails.
+#[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReturnReasonCode {
+    /// `R01`: Insufficient funds.
+    #[code("R01")]
+    InsufficientFunds,
+    /// `R02`: Account closed.
+    #[code("R02")]
+    AccountClosed,
+    /// `R03`: No account, or unable to locate the account.
+    #[code("R03")]
+    NoAccount,
+    /// `R04`: Invalid account number structure.
+    #[code("R04")]
+    InvalidAccountNumber,
+    /// `R05`: Unauthorized debit to a consumer account using a corporate SEC code.
+    #[code("R05")]
+    UnauthorizedCorporateDebit,
+    /// `R06`: Returned at the ODFI's request.
+    #[code("R06")]
+    ReturnedPerOdfiRequest,
+    /// `R07`: Authorization revoked by the customer.
+    #[code("R07")]
+    AuthorizationRevoked,
+    /// `R08`: Payment stopped.
+    #[code("R08")]
+    PaymentStopped,
+    /// `R09`: Uncollected funds.
+    #[code("R09")]
+    UncollectedFunds,
+    /// `R10`: Customer advises the originator is not known or not authorized.
+    #[code("R10")]
+    NotAuthorized,
+    /// `R11`: Customer advises the entry is not in accordance with the terms of the authorization.
+    #[code("R11")]
+    NotPerAuthorization,
+    /// `R12`: Account sold to another DFI.
+    #[code("R12")]
+    AccountSold,
+    /// `R13`: Invalid ACH routing number.
+    #[code("R13")]
+    InvalidRoutingNumber,
+    /// `R14`: Representative payee deceased or unable to continue in that capacity.
+    #[code("R14")]
+    RepresentativePayeeDeceased,
+    /// `R15`: Beneficiary or account holder deceased.
+    #[code("R15")]
+    AccountHolderDeceased,
+    /// `R16`: Account frozen, or the entry returned per OFAC instruction.
+    #[code("R16")]
+    AccountFrozen,
+    /// `R17`: File record edit criteria, or an entry initiated under questionable circumstances.
+    #[code("R17")]
+    FileRecordEditCriteria,
+    /// `R18`: Improper effective entry date.
+    #[code("R18")]
+    ImproperEffectiveEntryDate,
+    /// `R19`: Amount field error.
+    #[code("R19")]
+    AmountFieldError,
+    /// `R20`: Non-transaction account.
+    #[code("R20")]
+    NonTransactionAccount,
+    /// `R21`: Invalid company identification.
+    #[code("R21")]
+    InvalidCompanyId,
+    /// `R22`: Invalid individual ID number.
+    #[code("R22")]
+    InvalidIndividualId,
+    /// `R23`: Credit entry refused by the receiver.
+    #[code("R23")]
+    CreditRefused,
+    /// `R24`: Duplicate entry.
+    #[code("R24")]
+    DuplicateEntry,
+    /// `R25`: Addenda error.
+    #[code("R25")]
+    AddendaError,
+    /// `R26`: Mandatory field error.
+    #[code("R26")]
+    MandatoryFieldError,
+    /// `R27`: Trace number error.
+    #[code("R27")]
+    TraceNumberError,
+    /// `R28`: Routing number check digit error.
+    #[code("R28")]
+    RoutingCheckDigitError,
+    /// `R29`: Corporate customer advises not authorized.
+    #[code("R29")]
+    CorporateNotAuthorized,
+    /// `R30`: RDFI not a participant in the check truncation program.
+    #[code("R30")]
+    NotInCheckTruncationProgram,
+    /// `R31`: Permissible return entry (CCD and CTX only).
+    #[code("R31")]
+    PermissibleReturn,
+    /// `R32`: RDFI non-settlement.
+    #[code("R32")]
+    RdfiNonSettlement,
+    /// `R33`: Return of an XCK entry.
+    #[code("R33")]
+    XckReturn,
+    /// `R34`: Limited participation DFI.
+    #[code("R34")]
+    LimitedParticipationDfi,
+    /// `R35`: Return of an improper debit entry.
+    #[code("R35")]
+    ImproperDebit,
+    /// `R36`: Return of an improper credit entry.
+    #[code("R36")]
+    ImproperCredit,
+    /// `R37`: Source document presented for payment.
+    #[code("R37")]
+    SourceDocumentPresented,
+    /// `R38`: Stop payment on the source document.
+    #[code("R38")]
+    SourceDocumentStopped,
+    /// `R39`: Improper source document.
+    #[code("R39")]
+    ImproperSourceDocument,
+    /// `R40`: Return of an ENR entry by a federal government agency.
+    #[code("R40")]
+    EnrReturnedByAgency,
+    /// `R41`: Invalid transaction code (ENR only).
+    #[code("R41")]
+    EnrInvalidTransactionCode,
+    /// `R42`: Routing number or check digit error (ENR only).
+    #[code("R42")]
+    EnrRoutingNumberError,
+    /// `R43`: Invalid DFI account number (ENR only).
+    #[code("R43")]
+    EnrInvalidAccountNumber,
+    /// `R44`: Invalid individual ID number (ENR only).
+    #[code("R44")]
+    EnrInvalidIndividualId,
+    /// `R45`: Invalid individual or company name (ENR only).
+    #[code("R45")]
+    EnrInvalidName,
+    /// `R46`: Invalid representative payee indicator (ENR only).
+    #[code("R46")]
+    EnrInvalidRepresentativePayee,
+    /// `R47`: Duplicate enrollment (ENR only).
+    #[code("R47")]
+    EnrDuplicate,
+    /// `R50`: State law affecting RCK acceptance.
+    #[code("R50")]
+    RckStateLaw,
+    /// `R51`: Item related to an RCK entry is ineligible, or the RCK entry is improper.
+    #[code("R51")]
+    RckIneligible,
+    /// `R52`: Stop payment on the item related to an RCK entry.
+    #[code("R52")]
+    RckStopPayment,
+    /// `R53`: Item and RCK entry presented for payment.
+    #[code("R53")]
+    RckPresented,
+    /// `R90`: Returned to meet the RDFI's sanctions compliance obligations (moov-io/ach).
+    #[code("R90")]
+    SanctionsCompliance,
+}
+
+impl ReturnReasonCode {
+    /// True for R14 and R15, the only codes whose return addendum may carry a
+    /// date of death.
+    pub const fn allows_date_of_death(self) -> bool {
+        matches!(
+            self,
+            Self::RepresentativePayeeDeceased | Self::AccountHolderDeceased
+        )
+    }
 }
 
 /// Kind of receiving account.

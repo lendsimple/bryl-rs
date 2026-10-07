@@ -19,7 +19,7 @@ pub struct Totals {
 impl Totals {
     /// Adds one entry and its addenda.
     pub fn add_entry(&mut self, entry: &Entry) {
-        let records = u32::try_from(entry.addenda.len())
+        let records = u32::try_from(entry.addenda_count())
             .unwrap_or(u32::MAX)
             .saturating_add(1);
         self.entry_addenda_count = self.entry_addenda_count.saturating_add(records);

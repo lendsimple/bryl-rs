@@ -6,8 +6,11 @@
 
 mod common;
 
+use chrono::NaiveDate;
 use common::*;
-use nacha::{BatchParams, ServiceClassCode, TransactionCode, Writer};
+use nacha::{
+    BatchParams, ReturnParams, ReturnReasonCode, ServiceClassCode, TransactionCode, Writer,
+};
 use pretty_assertions::assert_eq;
 
 /// Compares `actual` with the snapshot `tests/fixtures/snapshots/{name}`.
@@ -120,11 +123,41 @@ fn two_batches() {
 }
 
 #[test]
+fn returns() {
+    let output = write(|file| {
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::DebitsOnly))
+            .unwrap();
+        batch
+            .entry(return_entry_params(ReturnReasonCode::InsufficientFunds))
+            .unwrap();
+        batch
+            .entry(nacha::EntryParams {
+                return_addendum: Some(ReturnParams {
+                    original_entry_trace_number: 91_000_010_000_002,
+                    date_of_death: NaiveDate::from_ymd_opt(2023, 5, 1),
+                    addenda_information: "SSA NOTICE".into(),
+                    ..return_params(ReturnReasonCode::AccountHolderDeceased)
+                }),
+                ..named("JOHN DOE", 1500, TransactionCode::SavingsReturnedDebit, &[])
+            })
+            .unwrap();
+        batch.finish().unwrap();
+    });
+    assert_snapshot("returns.ach", &output);
+}
+
+#[test]
 fn snapshots_read_back_and_validate() {
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         return; // the snapshots are being rewritten by the other tests
     }
-    for name in ["single_entry", "entries_with_addenda", "two_batches"] {
+    for name in [
+        "single_entry",
+        "entries_with_addenda",
+        "two_batches",
+        "returns",
+    ] {
         let file = nacha::File::read(read_snapshot(&format!("{name}.ach")).as_bytes()).unwrap();
         assert_eq!(file.validate(), [], "{name}");
     }

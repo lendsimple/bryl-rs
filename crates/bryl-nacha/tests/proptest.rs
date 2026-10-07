@@ -1,10 +1,11 @@
-//! Property tests: any valid file the writer produces reads back to the same
-//! entries and validates cleanly, and arbitrary input never panics the reader.
+//! Property tests: any valid file the writer produces, returns included,
+//! reads back to the same entries and validates cleanly, and arbitrary input
+//! never panics the reader.
 
 use chrono::NaiveDate;
 use nacha::{
-    BatchParams, EntryParams, File, FileParams, ServiceClassCode, StandardEntryClass,
-    TransactionCode, Writer,
+    BatchParams, EntryParams, File, FileParams, ReturnParams, ReturnReasonCode, ServiceClassCode,
+    StandardEntryClass, TransactionCode, Writer,
 };
 use proptest::prelude::*;
 
@@ -23,6 +24,28 @@ fn text(max: usize) -> impl Strategy<Value = String> {
         max - 2
     ))
     .unwrap()
+}
+
+/// A return addendum; the date of death is set only where the code allows
+/// one.
+fn return_params() -> impl Strategy<Value = ReturnParams> {
+    (
+        proptest::sample::select(ReturnReasonCode::ALL),
+        0u64..=999_999_999_999_999,
+        0u64..36_500,
+        0u32..=99_999_999,
+        proptest::option::of(text(44)),
+    )
+        .prop_map(|(code, original_trace, days, dfi, information)| {
+            let date = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap() + chrono::Days::new(days);
+            ReturnParams::builder()
+                .return_reason_code(code)
+                .original_entry_trace_number(original_trace)
+                .maybe_date_of_death(code.allows_date_of_death().then_some(date))
+                .original_receiving_dfi_id(dfi)
+                .addenda_information(information.unwrap_or_default())
+                .build()
+        })
 }
 
 fn entry(
@@ -45,18 +68,28 @@ fn entry(
         text(15),
         text(22),
         proptest::collection::vec(text(80), 0..=max_addenda),
+        return_params(),
     )
-        .prop_map(|(code, routing, account, amount, id, name, addenda)| {
-            EntryParams::builder()
-                .transaction_code(code)
-                .receiving_dfi(routing.parse().unwrap())
-                .account_number(account)
-                .amount(if code.is_prenote() { 0 } else { amount })
-                .individual_id(id)
-                .individual_name(name)
-                .addenda(addenda)
-                .build()
-        })
+        .prop_map(
+            |(code, routing, account, amount, id, name, addenda, returned)| {
+                // Returns carry only their return addendum.
+                let (addenda, returned) = if code.is_return() {
+                    (Vec::new(), Some(returned))
+                } else {
+                    (addenda, None)
+                };
+                EntryParams::builder()
+                    .transaction_code(code)
+                    .receiving_dfi(routing.parse().unwrap())
+                    .account_number(account)
+                    .amount(if code.is_prenote() { 0 } else { amount })
+                    .individual_id(id)
+                    .individual_name(name)
+                    .addenda(addenda)
+                    .maybe_return_addendum(returned)
+                    .build()
+            },
+        )
 }
 
 /// Entry classes paired with the service classes they can use: TEL is

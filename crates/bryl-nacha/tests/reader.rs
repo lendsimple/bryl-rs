@@ -8,7 +8,7 @@ use bryl::read::{Location, ReadErrorKind};
 use common::*;
 use nacha::{
     BatchHeader, EntryDetail, File, FileControl, Issue, IssueKind, NachaRecord, Reader,
-    TransactionCode,
+    ReturnReasonCode, TransactionCode,
 };
 
 mod structured {
@@ -163,6 +163,23 @@ mod errors {
         ));
         assert_eq!(err.location, Location::Line(4));
         assert!(err.to_string().starts_with("<memory> @ line 4 - "), "{err}");
+    }
+
+    #[test]
+    fn second_return_addendum() {
+        let output = return_file();
+        let mut lines: Vec<&str> = output.lines().collect();
+        lines.insert(4, lines[3]); // repeat the return addendum
+        let input = lines.join("\n");
+        let err = File::read(input.as_bytes()).unwrap_err();
+        assert!(matches!(
+            err.kind,
+            ReadErrorKind::UnexpectedRecord {
+                found: "ReturnAddendum",
+                ..
+            }
+        ));
+        assert_eq!(err.location, Location::Line(5));
     }
 
     #[test]
@@ -323,6 +340,39 @@ mod validate {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn return_entries() {
+        let file = File::read(return_file().as_bytes()).unwrap();
+        let entry = &file.batches[0].entries[0];
+        let addendum = entry.return_addendum.as_ref().unwrap();
+        assert!(entry.is_rejection());
+        assert_eq!(
+            addendum.return_reason_code,
+            ReturnReasonCode::InsufficientFunds
+        );
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn return_rules() {
+        let mut file = File::read(return_file().as_bytes()).unwrap();
+        let entry = &mut file.batches[0].entries[0];
+        let trace = entry.detail.trace_number;
+        entry.return_addendum.as_mut().unwrap().trace_number = 1;
+        assert_eq!(
+            kinds(&file),
+            [IssueKind::ReturnTraceNumber {
+                recorded: 1,
+                expected: trace
+            }]
+        );
+        let entry = &mut file.batches[0].entries[0];
+        entry.return_addendum = None;
+        entry.detail.addenda_record_indicator = 0;
+        // The control totals still count the removed addendum.
+        assert_eq!(kinds(&file)[0], IssueKind::MissingReturnAddendum,);
     }
 
     #[test]

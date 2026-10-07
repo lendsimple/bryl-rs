@@ -57,8 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   an entry outside a batch does not compile. The writer computes hashes,
   totals, counts and the block count, pads to whole blocks, and rejects
   batches and entries that break NACHA rules (service class, SEC code
-  debit/credit and addenda rules, prenote amounts) before writing anything.
-  Lines end with `\n` or, optionally, `\r\n`.
+  debit/credit and addenda rules, prenote amounts, returns) before writing
+  anything. Lines end with `\n` or, optionally, `\r\n`.
+- **Returns:** return entries carry a `ReturnAddendum` (addenda type 99)
+  with the `ReturnReasonCode` and the original entry's trace number.
 - **Reading:** `Reader` reads record by record; `File::read` reads a whole
   file and `File::validate` reports every problem.
 - **Values:** `RoutingNumber` checks the ABA checksum; `TransactionCode::for_entry`

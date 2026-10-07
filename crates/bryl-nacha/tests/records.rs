@@ -6,11 +6,12 @@
 mod common;
 
 use bryl::Record;
+use chrono::NaiveDate;
 use common::*;
 use nacha::{
     AccountKind, Addendum, BatchControl, BatchHeader, Entry, EntryDetail, FileControl, FileHeader,
-    FileIdModifier, NachaRecord, RoutingNumber, RoutingNumberError, ServiceClassCode,
-    StandardEntryClass, TransactionCode,
+    FileIdModifier, NachaRecord, ReturnAddendum, ReturnReasonCode, RoutingNumber,
+    RoutingNumberError, ServiceClassCode, StandardEntryClass, TransactionCode,
 };
 
 fn file_header() -> FileHeader {
@@ -67,6 +68,17 @@ fn addendum(info: &str, sequence: u16) -> Addendum {
         .payment_related_information(info)
         .addenda_sequence_number(sequence)
         .entry_detail_sequence_number(1_234_567)
+        .build()
+}
+
+fn return_addendum(date_of_death: Option<NaiveDate>) -> ReturnAddendum {
+    ReturnAddendum::builder()
+        .return_reason_code(ReturnReasonCode::AccountHolderDeceased)
+        .original_entry_trace_number(91_000_010_000_001)
+        .maybe_date_of_death(date_of_death)
+        .original_receiving_dfi_id(9_100_001)
+        .addenda_information("DECEASED")
+        .trace_number(123_456_789_012_345)
         .build()
 }
 
@@ -246,6 +258,64 @@ mod records {
             ..batch_header()
         };
         assert_eq!(&header.encode().unwrap()[4..13], "ACME CORP");
+    }
+
+    #[test]
+    fn return_addendum_layout() {
+        let line = return_addendum(None).encode().unwrap();
+        assert_eq!(line.len(), 94);
+        assert_eq!(&line[..6], "799R15");
+        assert_eq!(&line[6..21], "091000010000001");
+        assert_eq!(&line[21..27], "      "); // no date of death: blank
+        assert_eq!(&line[27..35], "09100001");
+        assert_eq!(line[35..79].trim_end(), "DECEASED");
+        assert_eq!(&line[79..], "123456789012345");
+    }
+
+    #[test]
+    fn return_addendum_roundtrip() {
+        for date in [None, NaiveDate::from_ymd_opt(2024, 3, 9)] {
+            let addendum = return_addendum(date);
+            let line = addendum.encode().unwrap();
+            if date.is_some() {
+                assert_eq!(&line[21..27], "240309");
+            }
+            let loaded = ReturnAddendum::decode_exact(line.as_bytes()).unwrap();
+            assert_eq!(loaded.addenda_information, "DECEASED");
+            assert_eq!(loaded.date_of_death, date);
+            assert_eq!(
+                loaded.return_reason_code,
+                ReturnReasonCode::AccountHolderDeceased
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_return_reason_is_rejected() {
+        // R61 (misrouted return) is a dishonored return, with another layout.
+        let line = return_addendum(None)
+            .encode()
+            .unwrap()
+            .replacen("R15", "R61", 1);
+        assert!(ReturnAddendum::decode_exact(line.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn dispatch_by_addenda_type() {
+        use bryl::read::Dispatch;
+        let line = return_addendum(None).encode().unwrap();
+        assert_eq!(
+            NachaRecord::dispatch(line.as_bytes()).unwrap(),
+            NachaRecord::ReturnAddendum(return_addendum(None))
+        );
+        let line = addendum("INFO", 1).encode().unwrap();
+        assert_eq!(
+            NachaRecord::dispatch(line.as_bytes()).unwrap(),
+            NachaRecord::Addendum(addendum("INFO", 1))
+        );
+        // Notification of change addenda (type 98) are not supported.
+        let line = line.replacen("705", "798", 1);
+        assert!(NachaRecord::dispatch(line.as_bytes()).is_err());
     }
 
     #[test]
@@ -502,6 +572,26 @@ mod codes {
             Sec::ALL.len()
         );
     }
+
+    #[test]
+    fn date_of_death_only_for_r14_and_r15() {
+        let allowed: Vec<_> = ReturnReasonCode::ALL
+            .iter()
+            .filter(|code| code.allows_date_of_death())
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(allowed, ["R14", "R15"]);
+    }
+
+    #[test]
+    fn return_reason_codes() {
+        assert_eq!(ReturnReasonCode::InsufficientFunds.as_code(), "R01");
+        assert_eq!(
+            "R90".parse::<ReturnReasonCode>(),
+            Ok(ReturnReasonCode::SanctionsCompliance)
+        );
+        assert!("R48".parse::<ReturnReasonCode>().is_err());
+    }
 }
 
 mod routing {
@@ -577,6 +667,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingReturnedCredit),
             addenda: vec![],
+            return_addendum: None,
         };
         assert!(entry.is_rejection());
     }
@@ -586,6 +677,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
+            return_addendum: None,
         };
         assert!(!entry.is_rejection());
     }
@@ -595,6 +687,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
+            return_addendum: None,
         };
         assert_eq!(
             entry.mask().detail.receiving_dfi_account_number,
@@ -610,6 +703,7 @@ mod entry {
                 ..entry_detail(TransactionCode::CheckingCredit)
             },
             addenda: vec![addendum("ADD INFO", 1)],
+            return_addendum: None,
         };
         let encoded = entry.encode().unwrap();
         assert_eq!(encoded.len(), 94 * 2 + 1);
@@ -620,10 +714,27 @@ mod entry {
     }
 
     #[test]
+    fn encode_decode_return() {
+        let entry = Entry {
+            detail: EntryDetail {
+                addenda_record_indicator: 1,
+                ..entry_detail(TransactionCode::CheckingReturnedDebit)
+            },
+            addenda: vec![],
+            return_addendum: Some(return_addendum(None)),
+        };
+        assert_eq!(entry.addenda_count(), 1);
+        let encoded = entry.encode().unwrap();
+        assert_eq!(encoded.len(), 94 * 2 + 1);
+        assert_eq!(Entry::decode(encoded.as_bytes()).unwrap(), entry);
+    }
+
+    #[test]
     fn encode_without_addenda() {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
+            return_addendum: None,
         };
         assert_eq!(entry.encode().unwrap().len(), 94);
     }

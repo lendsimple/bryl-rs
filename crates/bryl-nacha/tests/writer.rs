@@ -1,14 +1,16 @@
 //! Writing: record layout, numbering and sanitizing (`layout`), control
 //! totals and entry hashes (`totals`), block count and filler (`blocks`), and
-//! the NACHA rules the writer enforces (`rules`). Misusing the nesting is a
+//! the NACHA rules the writer enforces (`rules`), and return entries
+//! (`returns`). Misusing the nesting is a
 //! compile error; see the `compile_fail` doctests on `nacha::Writer`.
 
 mod common;
 
+use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    BatchParams, EntryParams, Error, File, IssueKind, ServiceClassCode, StandardEntryClass,
-    TransactionCode, Writer,
+    BatchParams, EntryParams, Error, File, IssueKind, ReturnParams, ReturnReasonCode,
+    ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 
 mod layout {
@@ -635,5 +637,108 @@ mod rules {
         drop(file);
         let output = String::from_utf8(writer.into_inner()).unwrap();
         assert_eq!(output.lines().count(), 1);
+    }
+}
+
+mod returns {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn write_return(params: EntryParams) -> Result<nacha::Entry, Error> {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::DebitsOnly))
+            .unwrap();
+        batch.entry(params)
+    }
+
+    fn rejected(params: EntryParams) -> IssueKind {
+        match write_return(params) {
+            Err(Error::InvalidEntry(kind)) => kind,
+            other => panic!("expected InvalidEntry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn return_addendum_follows_its_entry() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::DebitsOnly))
+            .unwrap();
+        let entry = batch
+            .entry(return_entry_params(ReturnReasonCode::InsufficientFunds))
+            .unwrap();
+        let control = batch.finish().unwrap();
+        file.finish().unwrap();
+
+        let addendum = entry.return_addendum.unwrap();
+        assert_eq!(entry.detail.addenda_record_indicator, 1);
+        assert_eq!(addendum.trace_number, entry.detail.trace_number);
+        assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
+        assert_eq!(control.entry_addenda_count, 2);
+        assert_eq!(control.total_debit_amount, 2500);
+
+        let output = String::from_utf8(writer.into_inner()).unwrap();
+        let lines = record_lines(&output);
+        assert!(lines[2].starts_with("626"));
+        assert!(lines[3].starts_with("799R01091000010000001"));
+        let file = File::read(output.as_bytes()).unwrap();
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn return_needs_return_addendum() {
+        let kind = rejected(entry_params(
+            TransactionCode::CheckingReturnedDebit,
+            2500,
+            &[],
+        ));
+        assert_eq!(kind, IssueKind::MissingReturnAddendum);
+    }
+
+    #[test]
+    fn return_addendum_needs_return_code() {
+        let kind = rejected(EntryParams {
+            return_addendum: Some(return_params(ReturnReasonCode::AccountClosed)),
+            ..entry_params(TransactionCode::CheckingDebit, 2500, &[])
+        });
+        assert_eq!(
+            kind,
+            IssueKind::UnexpectedReturnAddendum {
+                transaction_code: TransactionCode::CheckingDebit
+            }
+        );
+    }
+
+    #[test]
+    fn return_carries_no_other_addenda() {
+        let kind = rejected(EntryParams {
+            addenda: vec!["MEMO".into()],
+            ..return_entry_params(ReturnReasonCode::AccountClosed)
+        });
+        assert_eq!(kind, IssueKind::ReturnEntryAddenda { count: 1 });
+    }
+
+    #[test]
+    fn date_of_death_only_for_deaths() {
+        let date = NaiveDate::from_ymd_opt(2024, 3, 9);
+        let with_date = |code| EntryParams {
+            return_addendum: Some(ReturnParams {
+                date_of_death: date,
+                ..return_params(code)
+            }),
+            ..return_entry_params(code)
+        };
+        let kind = rejected(with_date(ReturnReasonCode::AccountClosed));
+        assert_eq!(
+            kind,
+            IssueKind::DateOfDeath {
+                return_reason_code: ReturnReasonCode::AccountClosed
+            }
+        );
+        let entry = write_return(with_date(ReturnReasonCode::AccountHolderDeceased)).unwrap();
+        assert_eq!(entry.return_addendum.unwrap().date_of_death, date);
     }
 }

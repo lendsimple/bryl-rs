@@ -4,8 +4,8 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use nacha::{
-    BatchParams, EntryDetail, EntryParams, FileParams, RoutingNumber, ServiceClassCode,
-    StandardEntryClass, TransactionCode, Writer,
+    BatchParams, EntryDetail, EntryParams, FileParams, ReturnParams, ReturnReasonCode,
+    RoutingNumber, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 
 pub fn sample_date() -> NaiveDate {
@@ -81,6 +81,24 @@ pub fn entry_params(
         .build()
 }
 
+/// A return addendum for an entry that was sent with trace number
+/// 091000010000001 to routing number 091000019.
+pub fn return_params(return_reason_code: ReturnReasonCode) -> ReturnParams {
+    ReturnParams::builder()
+        .return_reason_code(return_reason_code)
+        .original_entry_trace_number(91_000_010_000_001)
+        .original_receiving_dfi_id(9_100_001)
+        .build()
+}
+
+/// A return of a checking debit.
+pub fn return_entry_params(return_reason_code: ReturnReasonCode) -> EntryParams {
+    EntryParams {
+        return_addendum: Some(return_params(return_reason_code)),
+        ..entry_params(TransactionCode::CheckingReturnedDebit, 2500, &[])
+    }
+}
+
 /// Writes a file with one mixed batch of identical entries and returns it.
 pub fn write_sample_file(
     entry_count: usize,
@@ -98,6 +116,21 @@ pub fn write_sample_file(
             .entry(entry_params(transaction_code, amount, addenda))
             .unwrap();
     }
+    batch.finish().unwrap();
+    file.finish().unwrap();
+    String::from_utf8(writer.into_inner()).unwrap()
+}
+
+/// Writes a file with one debits-only batch holding an R01 return.
+pub fn return_file() -> String {
+    let mut writer = Writer::new(Vec::new());
+    let mut file = writer.begin_file(file_params()).unwrap();
+    let mut batch = file
+        .begin_batch(batch_params(ServiceClassCode::DebitsOnly))
+        .unwrap();
+    batch
+        .entry(return_entry_params(ReturnReasonCode::InsufficientFunds))
+        .unwrap();
     batch.finish().unwrap();
     file.finish().unwrap();
     String::from_utf8(writer.into_inner()).unwrap()

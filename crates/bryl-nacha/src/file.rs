@@ -57,7 +57,7 @@ impl File {
                 2 + batch
                     .entries
                     .iter()
-                    .map(|entry| 1 + entry.addenda.len())
+                    .map(|entry| 1 + entry.addenda_count())
                     .sum::<usize>()
             })
             .sum::<usize>()

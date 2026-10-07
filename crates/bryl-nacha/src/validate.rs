@@ -4,7 +4,9 @@ use std::fmt;
 
 use thiserror::Error;
 
-use crate::codes::{REVERSAL, ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{
+    REVERSAL, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
+};
 use crate::entry::Entry;
 use crate::records::BatchHeader;
 
@@ -114,6 +116,37 @@ pub enum IssueKind {
         /// Last seven digits of the entry's trace number.
         expected: u32,
     },
+    /// A return entry (other than in a COR batch) has no return addendum.
+    #[error("return entries need a return addendum")]
+    MissingReturnAddendum,
+    /// An entry that is not a return has a return addendum.
+    #[error(
+        "transaction code {transaction_code} is not a return but the entry has a return addendum"
+    )]
+    UnexpectedReturnAddendum {
+        /// Entry transaction code.
+        transaction_code: TransactionCode,
+    },
+    /// A return entry has type-05 addenda as well as its return addendum.
+    #[error("return entries carry only their return addendum, got {count} other addenda")]
+    ReturnEntryAddenda {
+        /// Type-05 addenda present.
+        count: usize,
+    },
+    /// A return addendum's trace number differs from its entry's.
+    #[error("return addendum trace number is {recorded:015}, expected {expected:015}")]
+    ReturnTraceNumber {
+        /// Value in the return addendum.
+        recorded: u64,
+        /// The entry's trace number.
+        expected: u64,
+    },
+    /// A date of death with a return reason other than R14 or R15.
+    #[error("a date of death is only allowed with R14 and R15, got {return_reason_code}")]
+    DateOfDeath {
+        /// The return reason code.
+        return_reason_code: ReturnReasonCode,
+    },
     /// Trace numbers within a batch are not ascending.
     #[error("trace number is not greater than the previous entry's")]
     TraceOrder,
@@ -204,26 +237,22 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
             amount: detail.amount,
         });
     }
-    let max = batch.standard_entry_class.max_addenda();
-    if entry.addenda.len() > usize::from(max) {
-        issues.push(IssueKind::TooManyAddenda {
-            standard_entry_class: batch.standard_entry_class,
-            max,
-            count: entry.addenda.len(),
-        });
+    // Notifications of change (COR) also use return transaction codes, but
+    // carry type-98 addenda, which are not supported.
+    if code.is_return() && sec != StandardEntryClass::Cor {
+        return_issues(entry, &mut issues);
+    } else {
+        if entry.return_addendum.is_some() {
+            issues.push(IssueKind::UnexpectedReturnAddendum {
+                transaction_code: code,
+            });
+        }
+        addenda_limit_issues(sec, entry, &mut issues);
     }
-    let min = batch.standard_entry_class.min_addenda();
-    if entry.addenda.len() < usize::from(min) {
-        issues.push(IssueKind::TooFewAddenda {
-            standard_entry_class: batch.standard_entry_class,
-            min,
-            count: entry.addenda.len(),
-        });
-    }
-    if detail.addenda_record_indicator != u8::from(!entry.addenda.is_empty()) {
+    if detail.addenda_record_indicator != u8::from(entry.addenda_count() > 0) {
         issues.push(IssueKind::AddendaIndicator {
             recorded: detail.addenda_record_indicator,
-            count: entry.addenda.len(),
+            count: entry.addenda_count(),
         });
     }
     for (index, addendum) in entry.addenda.iter().enumerate() {
@@ -242,4 +271,50 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
         }
     }
     issues
+}
+
+/// A return entry carries exactly one return addendum and nothing else.
+fn return_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
+    if !entry.addenda.is_empty() {
+        issues.push(IssueKind::ReturnEntryAddenda {
+            count: entry.addenda.len(),
+        });
+    }
+    let Some(addendum) = &entry.return_addendum else {
+        issues.push(IssueKind::MissingReturnAddendum);
+        return;
+    };
+    if addendum.trace_number != entry.detail.trace_number {
+        issues.push(IssueKind::ReturnTraceNumber {
+            recorded: addendum.trace_number,
+            expected: entry.detail.trace_number,
+        });
+    }
+    let code = addendum.return_reason_code;
+    if addendum.date_of_death.is_some() && !code.allows_date_of_death() {
+        issues.push(IssueKind::DateOfDeath {
+            return_reason_code: code,
+        });
+    }
+}
+
+/// The type-05 addenda limits of the entry class.
+fn addenda_limit_issues(sec: StandardEntryClass, entry: &Entry, issues: &mut Vec<IssueKind>) {
+    let count = entry.addenda.len();
+    let max = sec.max_addenda();
+    if count > usize::from(max) {
+        issues.push(IssueKind::TooManyAddenda {
+            standard_entry_class: sec,
+            max,
+            count,
+        });
+    }
+    let min = sec.min_addenda();
+    if count < usize::from(min) {
+        issues.push(IssueKind::TooFewAddenda {
+            standard_entry_class: sec,
+            min,
+            count,
+        });
+    }
 }

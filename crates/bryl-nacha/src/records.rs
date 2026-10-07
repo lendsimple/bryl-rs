@@ -1,11 +1,11 @@
-//! The six NACHA record types (94 characters each).
+//! The NACHA record types (94 characters each).
 
 use bon::Builder;
 use bryl::read::{Dispatch, ReadErrorKind};
 use bryl::{Const, Record};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
-use crate::codes::{ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
 use crate::types::{FileIdModifier, RoutingNumber};
 
 /// Length of every NACHA record.
@@ -213,6 +213,48 @@ pub struct Addendum {
     pub entry_detail_sequence_number: u32,
 }
 
+/// Return addenda record (`7`, addenda type `99`). A return entry carries
+/// exactly one, in place of type-05 addenda.
+///
+/// The layout is the standard return layout. Dishonored and contested
+/// dishonored returns rearrange the addenda information and are not
+/// supported (see [`ReturnReasonCode`]).
+#[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[bryl(sanitize(upper), length = 94)]
+#[builder(on(String, into))]
+pub struct ReturnAddendum {
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), constant = "7")]
+    #[builder(skip)]
+    pub record_type: Const,
+    /// Fixed by the format; stores nothing.
+    #[bryl(numeric(2), constant = 99)]
+    #[builder(skip)]
+    pub addenda_type_code: Const,
+    /// Why the entry was returned.
+    #[bryl(alpha(3))]
+    pub return_reason_code: ReturnReasonCode,
+    /// Trace number of the entry being returned.
+    #[bryl(numeric(15))]
+    pub original_entry_trace_number: u64,
+    /// Only for R14 and R15; blank otherwise. Two-digit years decode as
+    /// 20YY.
+    #[bryl(date("YYMMDD"), pad = ' ')]
+    pub date_of_death: Option<NaiveDate>,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    #[bryl(numeric(8))]
+    pub original_receiving_dfi_id: u32,
+    /// Free-form information from the returning DFI.
+    #[bryl(alpha(44))]
+    #[builder(default)]
+    pub addenda_information: String,
+    /// Trace number of the return entry itself, the same as its entry
+    /// detail's.
+    #[bryl(numeric(15))]
+    pub trace_number: u64,
+}
+
 /// Company/batch control record (`8`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
 #[bryl(sanitize(upper), length = 94)]
@@ -299,8 +341,10 @@ pub enum NachaRecord {
     BatchHeader(BatchHeader),
     /// `6`
     EntryDetail(EntryDetail),
-    /// `7`
+    /// `7`, addenda type `05`
     Addendum(Addendum),
+    /// `7`, addenda type `99`
+    ReturnAddendum(ReturnAddendum),
     /// `8`
     BatchControl(BatchControl),
     /// `9`
@@ -323,6 +367,9 @@ impl Dispatch for NachaRecord {
             Some(b'1') => Self::FileHeader(FileHeader::decode_exact(raw)?),
             Some(b'5') => Self::BatchHeader(BatchHeader::decode_exact(raw)?),
             Some(b'6') => Self::EntryDetail(EntryDetail::decode_exact(raw)?),
+            Some(b'7') if raw.get(1..3) == Some(b"99") => {
+                Self::ReturnAddendum(ReturnAddendum::decode_exact(raw)?)
+            }
             Some(b'7') => Self::Addendum(Addendum::decode_exact(raw)?),
             Some(b'8') => Self::BatchControl(BatchControl::decode_exact(raw)?),
             Some(b'9') => Self::FileControl(FileControl::decode_exact(raw)?),
@@ -339,6 +386,7 @@ impl Dispatch for NachaRecord {
             Self::BatchHeader(_) => BatchHeader::NAME,
             Self::EntryDetail(_) => EntryDetail::NAME,
             Self::Addendum(_) => Addendum::NAME,
+            Self::ReturnAddendum(_) => ReturnAddendum::NAME,
             Self::BatchControl(_) => BatchControl::NAME,
             Self::FileControl(_) => FileControl::NAME,
             Self::Filler => "Filler",

@@ -84,7 +84,8 @@ impl<R: BufRead> Reader<R> {
     }
 
     /// Reads the next entry and its addenda, or returns `None` if the next
-    /// record is not an entry detail (normally the batch control).
+    /// record is not an entry detail (normally the batch control). A second
+    /// return addendum is left unread, so the next read reports it.
     ///
     /// # Errors
     ///
@@ -97,14 +98,24 @@ impl<R: BufRead> Reader<R> {
         else {
             return Ok(None);
         };
-        let mut addenda = Vec::new();
-        while let Some(addendum) = self.inner.next_if(|record| match record {
-            NachaRecord::Addendum(addendum) => Ok(addendum),
+        let mut entry = Entry {
+            detail,
+            addenda: Vec::new(),
+            return_addendum: None,
+        };
+        let has_return = |entry: &Entry| entry.return_addendum.is_some();
+        while let Some(record) = self.inner.next_if(|record| match record {
+            NachaRecord::Addendum(_) => Ok(record),
+            NachaRecord::ReturnAddendum(_) if !has_return(&entry) => Ok(record),
             other => Err(other),
         })? {
-            addenda.push(addendum);
+            match record {
+                NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
+                NachaRecord::ReturnAddendum(addendum) => entry.return_addendum = Some(addendum),
+                _ => unreachable!("selected above"),
+            }
         }
-        Ok(Some(Entry { detail, addenda }))
+        Ok(Some(entry))
     }
 
     /// Iterates over the current batch's entries.
