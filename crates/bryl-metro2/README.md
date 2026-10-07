@@ -71,6 +71,3 @@ each rule.
 ## License
 
 Licensed under the [MIT License](LICENSE).
-
-The moov-io reference files in `tests/fixtures/moov` are under moov-io's
-Apache License 2.0 (see `tests/fixtures/moov/LICENSE`).
