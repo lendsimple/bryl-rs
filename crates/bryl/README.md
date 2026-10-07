@@ -14,4 +14,4 @@ See the crate documentation for the full attribute list.
 
 ## License
 
-Licensed under the [MIT License](../../LICENSE).
+Licensed under the [MIT License](LICENSE).

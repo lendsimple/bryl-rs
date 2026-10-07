@@ -70,4 +70,4 @@ errors and configuration. Spec decisions are listed in the repository's
 
 ## License
 
-Licensed under the [MIT License](../../LICENSE).
+Licensed under the [MIT License](LICENSE).
