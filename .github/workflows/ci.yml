@@ -88,7 +88,10 @@ jobs:
         run: |
           for target in nacha_file metro2_file; do
             mkdir -p "corpus/$target"
-            cargo +nightly fuzz run "$target" "corpus/$target" "seeds/$target" -- \
+            # The prebuilt cargo-fuzz is a musl binary and defaults to its own
+            # target, which ASan cannot instrument; build for glibc instead.
+            cargo +nightly fuzz run --target x86_64-unknown-linux-gnu \
+              "$target" "corpus/$target" "seeds/$target" -- \
               -max_total_time=60 -max_len=8192
           done
       - name: Upload crash artifacts
