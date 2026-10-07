@@ -10,6 +10,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["fixed-width", "record", "encoding", "parser", "derive"]
 categories = ["encoding", "parser-implementations"]
+exclude = ["tests"]
 
 [dependencies]
 bryl-derive.workspace = true

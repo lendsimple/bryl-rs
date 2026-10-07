@@ -10,6 +10,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["fixed-width", "date", "pattern"]
 categories = ["encoding", "date-and-time"]
+exclude = ["tests"]
 
 [dependencies]
 thiserror.workspace = true
