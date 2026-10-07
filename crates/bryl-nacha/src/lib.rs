@@ -240,6 +240,14 @@
 //!   outside addenda). The writer uppercases text and accepts printable
 //!   ASCII; it never writes anything else, so files are plain ASCII.
 //!
+//! # Not supported
+//!
+//! - Addenda other than type 05: type 02 (MTE, POS, SHR), type 98
+//!   (notifications of change, COR) and type 99 (returns). Entries of these
+//!   classes cannot carry their required addenda, and reading a file that
+//!   contains them fails.
+//! - International entries (IAT) and their addenda types 10–18.
+//!
 //! # Sources
 //!
 //! The rules follow these public sources. Where a rule rests on a single
