@@ -107,8 +107,9 @@ bryl-rs/
 │   │   │        validate.rs, writer.rs, reader.rs, error.rs}
 │   │   └── tests/{records.rs, writer.rs, reader.rs, roundtrip.rs, moov_fixtures.rs, fixtures/…}
 │   └── bryl-nacha/            # package bryl-nacha, [lib] name = "nacha"
-│       ├── src/{lib.rs, codes.rs, records.rs, routing.rs, entry.rs, writer.rs, reader.rs, file.rs, error.rs}
-│       └── tests/{records.rs, writer.rs, reader.rs, roundtrip.rs, fixtures/…}
+│       ├── src/{lib.rs, codes.rs, records.rs, types.rs, entry.rs, totals.rs, validate.rs,
+│       │        writer.rs, reader.rs, file.rs, error.rs}
+│       └── tests/{records.rs, writer.rs, reader.rs, golden.rs, fixtures/golden/*.ach}
 └── tools/gen_golden.py        # regenerates golden files from lms-python
 ```
 
@@ -471,7 +472,17 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 - SEC addenda limit
 - an entry error leaving the output unchanged
 - the reader skipping filler lines
-**Status**: Not Started
+**Status**: Complete. 106 tests: records and codes (44), writer (31), reader and validation (23), golden byte comparison (3), doctests including three `compile_fail` checks of the typestate guards (5). Also passes on 1.85. Golden files come from `tools/gen_golden.py`.
+**Notes** (departures from the design above):
+- **N14 (new):** the receiving DFI account number is left-aligned, not right-aligned as in Python and in this plan's sketch. The NACHA spec requires alphanumeric fields to be left-justified. Reading a Python-written file therefore keeps the account number's leading spaces.
+- **N15 (new):** `FileIdModifier` is a validated type (`A`–`Z`, `0`–`9`).
+- `immediate_destination` is a `RoutingNumber` (checksum-validated, written ` TTTTAAAAC` with its leading zero), not a plain integer. Python lost the leading zero when given an `int`.
+- `Const` fields on records are public. They store nothing, and public fields allow struct-update syntax (`EntryDetail { amount: 5, ..other }`).
+- Lines must be exactly 94 characters on read (`decode_exact`), part of N12.
+- Writer: `Writer::begin_file` borrows the writer mutably and `FileWriter::begin_batch` borrows the file mutably. Batch numbers advance on `begin_batch`, as in Python, so an abandoned batch never reuses its number. `entry` only consumes a trace sequence number when it writes. `Writer::sanitize(...)` overrides the uppercase default.
+- `Writer` takes the addenda as `Vec<String>`; Python's dict form (`{"payment_related_information": ...}`) is dropped since it had only that one key.
+- Validation rules live in `validate.rs` and are shared: the writer rejects an entry with `Error::InvalidEntry(IssueKind)`, and `File::validate` returns `Issue`s with batch and trace numbers.
+- The reader allows clippy's `result_large_err` in one module: the selection closures return `Err(record)` to hand a record back, which is not an error path.
 
 ### Stage 5: `bryl-metro2`
 **Goal**: records, the 18 code enums, `DataRecord`, validation, the writer, and the reader, with M1–M12 applied (BDW excluded) and documented.

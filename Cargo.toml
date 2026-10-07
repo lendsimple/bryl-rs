@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bryl", "crates/bryl-derive", "crates/bryl-pattern"]
+members = ["crates/bryl", "crates/bryl-derive", "crates/bryl-nacha", "crates/bryl-pattern"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +13,7 @@ publish = false
 bryl = { path = "crates/bryl" }
 bryl-derive = { path = "crates/bryl-derive" }
 bryl-pattern = { path = "crates/bryl-pattern" }
+bon = "3"
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 thiserror = "2"
 proptest = "1"

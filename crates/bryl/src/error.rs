@@ -75,6 +75,9 @@ pub enum FieldErrorKind {
         /// The field kind.
         kind: &'static str,
     },
+    /// A format-specific rule rejected the value (e.g. a bad check digit).
+    #[error("{0}")]
+    Invalid(String),
     /// A `Const` field has no constant in its spec.
     #[error("field has no constant value")]
     MissingConstant,
