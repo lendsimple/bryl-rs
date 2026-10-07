@@ -2,6 +2,11 @@ use crate::sanitize::Sanitize;
 use bryl_pattern::{Token, pattern_width};
 
 /// Which side of a field a value is aligned to; padding fills the other side.
+///
+/// Decoding strips padding from the padded side only, so a left-aligned,
+/// zero-padded numeric field loses trailing zeros: `420` in a 5-digit field
+/// is written `42000` and read back as `42`. Keep zero-padded numerics
+/// right-aligned (the default).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Align {
     /// Value first, padding after (alphanumeric default).

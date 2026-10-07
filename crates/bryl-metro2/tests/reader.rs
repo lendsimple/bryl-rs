@@ -345,7 +345,7 @@ mod malformed {
         reader.header().unwrap();
         let err = reader.data_records().next().unwrap().unwrap_err();
         assert!(err.to_string().contains("truncated J1 segment"), "{err}");
-        // M10: located at the data record, not offset 0.
+        // Located at the data record, not offset 0.
         assert_eq!(err.location, Location::Offset(426));
     }
 
@@ -630,7 +630,7 @@ mod moov {
 
     #[test]
     fn variable_blocked_file() {
-        // M12: the header is in a block (`0496` + `0426HEADER…` + padding);
+        // The header is in a block (`0496` + `0426HEADER…` + padding);
         // the data record and trailer are not.
         let file = Reader::new(fixture("moov/unpacked_variable_file.dat").as_bytes())
             .newline(true)
@@ -653,14 +653,14 @@ mod moov {
         K3Segment::decode(fixture("moov/k3_segment.dat").as_bytes()).unwrap();
         L1Segment::decode(fixture("moov/l1_segment.dat").as_bytes()).unwrap();
         let n1 = N1Segment::decode(fixture("moov/n1_segment.dat").as_bytes()).unwrap();
-        // B5: Python's test expected "EMPLOYER NAME" only because loading
+        // Python's test expected "EMPLOYER NAME" only because loading
         // uppercased; the file says "Employer Name".
         assert_eq!(n1.employer_name, "Employer Name");
     }
 
     /// moov-io hard-wraps some fixtures with newlines for readability; the
     /// content is valid once unwrapped. Embedded newlines themselves are
-    /// rejected (B6).
+    /// rejected.
     #[test]
     fn wrapped_fixtures() {
         let unwrap = |path| fixture(path).replace('\n', "");
@@ -672,12 +672,12 @@ mod moov {
         assert_eq!(trailer.total_base_records, 1);
         // header_record.dat and base_segment.dat start with a block
         // descriptor word (`0430` before `0426HEADER`): the variable-blocked
-        // format, not supported yet (M12).
+        // format, not supported yet.
     }
 }
 
 mod blocked {
-    //! Variable-blocked files (M12): a 4-digit block descriptor word (the
+    //! Variable-blocked files: a 4-digit block descriptor word (the
     //! block's length, counting itself) followed by RDW-prefixed records.
     use super::*;
     use pretty_assertions::assert_eq;

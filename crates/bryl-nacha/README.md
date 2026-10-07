@@ -65,8 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   picks a code from a signed amount.
 
 The crate documentation (`cargo doc -p bryl-nacha --open`) covers the rules,
-errors and configuration. Spec decisions are listed in the repository's
-`DEVIATIONS.md`.
+errors, configuration, differences between banks, and the sources for each
+rule.
 
 ## License
 

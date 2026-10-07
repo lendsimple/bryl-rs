@@ -152,8 +152,8 @@ impl FieldValue for RoutingNumber {
 
 impl NumericField for RoutingNumber {}
 
-/// File ID modifier: `A`–`Z` or `0`–`9`, distinguishing files created on the
-/// same day for the same destination.
+/// File ID modifier: `A`–`Z` or `0`–`9` (NACHA's developer guide),
+/// distinguishing files created on the same day for the same destination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FileIdModifier(u8);
 

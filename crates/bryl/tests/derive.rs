@@ -436,7 +436,7 @@ mod code {
 
     #[test]
     fn unknown_code_rejected_on_decode() {
-        // Python's Metro 2 code tables never validated fields (M3).
+        // Python's Metro 2 code tables never validated fields.
         let err = Coded::decode(b"9922501  ").unwrap_err();
         assert_eq!(
             err,

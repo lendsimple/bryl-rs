@@ -143,7 +143,7 @@ mod records {
 
     #[test]
     fn immediate_origin_is_right_aligned() {
-        // N7: Python left-aligned this field.
+        // Python left-aligned this field.
         let header = FileHeader {
             immediate_origin: "091000019".into(),
             ..file_header()
@@ -191,7 +191,7 @@ mod records {
 
     #[test]
     fn entry_detail_account_number_is_left_aligned() {
-        // N14: Python right-aligned this field.
+        // Python right-aligned this field.
         let encoded = entry_detail(TransactionCode::CheckingCredit)
             .encode()
             .unwrap();
@@ -202,7 +202,7 @@ mod records {
     fn entry_detail_mask() {
         let masked = entry_detail(TransactionCode::CheckingCredit).mask();
         assert_eq!(masked.receiving_dfi_account_number, "X".repeat(17));
-        // The original is untouched (N13).
+        // The original is untouched.
         assert_eq!(
             entry_detail(TransactionCode::CheckingCredit).receiving_dfi_account_number,
             "9876543210"

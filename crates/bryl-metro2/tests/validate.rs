@@ -3,7 +3,7 @@
 //! | `test_metro2.py`              | Here |
 //! |-------------------------------|------|
 //! | `TestIsValidSSN`/`Phone`/`DOB` | `helpers::*` |
-//! | `TestValidatePaymentRating`   | `payment_rating::*`, rewritten for the CRRG rule (M8) |
+//! | `TestValidatePaymentRating`   | `payment_rating::*`, rewritten for the CRRG rule |
 //! | `TestValidateAmountPastDue`   | `amount_past_due::*` |
 //! | `TestValidatePaymentHistory`  | `payment_history::*` |
 //!
@@ -45,7 +45,7 @@ mod helpers {
 }
 
 mod payment_rating {
-    //! Python required e.g. rating `0` for status 11 (M8). The CRRG rule, as
+    //! Python required e.g. rating `0` for status 11. The CRRG rule, as
     //! implemented by moov-io/metro2: a rating is required for 05, 13, 65, 88,
     //! 89, 94 and 95, and must be blank otherwise.
     use super::*;
@@ -267,7 +267,7 @@ mod base_segment {
 
     #[test]
     fn status_05_is_retired() {
-        // M18: retired by CDIA in April 2022.
+        // Retired by CDIA in April 2022.
         let err = base_with_status(AccountStatus::Transferred)
             .validate()
             .unwrap_err();
@@ -282,7 +282,7 @@ mod base_segment {
 }
 
 mod characters {
-    //! M17: character rules from the CRRG's field descriptions.
+    //! Character rules from the CRRG's field descriptions.
     use super::*;
     use metro2::{CharClass, DataRecord, J1Segment, J2Segment, L1Segment};
     use pretty_assertions::assert_eq;

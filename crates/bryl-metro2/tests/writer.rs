@@ -4,7 +4,7 @@
 //! |-----------------------------|------|
 //! | `TestWriter`                | `layout::*` |
 //! | `TestWriterTrailerTotals`   | `totals::*` |
-//! | `TestWriterErrors`          | Compile errors now (typestate guards); see the doctests on `metro2::Writer`. Plus `validation::*` (M7). |
+//! | `TestWriterErrors`          | Compile errors now (typestate guards); see the doctests on `metro2::Writer`. Plus `validation::*`. |
 //! | `TestWriterNewlineMode`     | `newline::*` |
 
 mod common;
@@ -87,7 +87,7 @@ mod layout {
         file.write(&DataRecord::new(base())).unwrap();
         assert_eq!(file.trailer().total_base_records, 1);
         let trailer = file.finish().unwrap();
-        // Unblocked files report a block count of 0 (M6).
+        // Unblocked files report a block count of 0.
         assert_eq!(trailer.block_count, 0);
         let output = writer.into_inner();
         assert_eq!(
@@ -117,7 +117,7 @@ mod totals {
 
     #[test]
     fn block_count_is_zero_for_unblocked_files() {
-        // M6: metro2.py and moov-io wrote base records + 2.
+        // `metro2.py` and moov-io wrote base records + 2.
         let t = trailer_of(&vec![DataRecord::new(base()); 2]);
         assert_eq!(t.block_count, 0);
     }
@@ -143,7 +143,7 @@ mod totals {
     #[test]
     fn every_status_has_a_counter() {
         // Counted from the records directly: the writer rejects the retired
-        // status 05 (M18), but files read back may still contain it.
+        // status 05, but files read back may still contain it.
         let records: Vec<_> = AccountStatus::ALL
             .iter()
             .map(|&s| DataRecord::new(base_with_status(s)))

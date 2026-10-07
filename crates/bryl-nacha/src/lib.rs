@@ -221,11 +221,47 @@
 //!     .sanitize(nacha::Sanitize::UPPER); // uppercase text (the default)
 //! ```
 //!
-//! Reading accepts both LF and CRLF. Banks differ on details NACHA leaves
-//! open, such as line endings, whether prenotes are accepted, and the
-//! immediate origin value; check your bank's file specification.
+//! Reading accepts both LF and CRLF.
 //!
-//! Spec decisions are listed in the repository's `DEVIATIONS.md`.
+//! # Bank differences
+//!
+//! NACHA leaves some details to the bank receiving the file. Check its file
+//! specification for:
+//!
+//! - **Line endings.** Some banks require CRLF ([`LineEnding::CrLf`]).
+//! - **Prenotes.** Some banks (Chase) do not accept them.
+//! - **Service class.** Some banks (Chase) want credits-only (220) or
+//!   debits-only (225) batches rather than mixed (200).
+//! - **Immediate origin.** Usually the originating bank's routing number
+//!   preceded by a blank; some banks ask for a 10-character company ID.
+//! - **Characters.** NACHA requires uppercase codes. Rules for free text
+//!   range from permissive (Chase accepts lowercase and `. / ( ) & ' -`) to
+//!   strict (Banc of California: uppercase only, no special characters
+//!   outside addenda). The writer uppercases text and accepts printable
+//!   ASCII; it never writes anything else, so files are plain ASCII.
+//!
+//! # Sources
+//!
+//! The rules follow these public sources. Where a rule rests on a single
+//! source, its documentation says so.
+//!
+//! - [NACHA's ACH developer guide](https://achdevguide.nacha.org/ach-file-details):
+//!   record layouts; filler lines and the block count; the immediate
+//!   destination and origin; trace numbers ascending within a batch and
+//!   unique within the file; ascending batch numbers; the file ID modifier;
+//!   addenda limits for PPD, CCD, WEB, TEL and CTX; debit-only TEL entries;
+//!   uppercase codes.
+//! - Bank file specifications from
+//!   [Chase](https://www.chase.com/content/dam/chaseonline/en/demos/cbo/pdfs/cbo_nacha_filespecs.pdf),
+//!   [Regions](https://www.regions.com/-/media/pdfs/treasury-management/NACHA_File_Layout_Guide.pdf),
+//!   [First Citizens](https://www.firstcitizens.com/content/dam/firstcitizens/pdfs/commercial/commercial-advantage/nacha-file-specs.pdf)
+//!   and
+//!   [Banc of California](https://dam.bancofcal.com/m/5ec324636794be06/original/UG32-NACHA-File-Format-Specifications.pdf):
+//!   left-justified account numbers, addenda sequence numbers from `0001`,
+//!   zero-amount prenotes, required filler, line endings, character sets.
+//! - [moov-io/ach](https://github.com/moov-io/ach) (`batch*.go`): addenda
+//!   limits for the other entry classes, debit- and credit-only entry classes,
+//!   and the `AUTOENROLL` and `REDEPCHECK` entry descriptions.
 
 mod codes;
 mod entry;

@@ -256,7 +256,35 @@
 //! Read errors name the input (set with [`Reader::with_name`]) and the byte
 //! offset or line, e.g. `report.dat @ offset 426 - truncated J1 segment`.
 //!
-//! Spec decisions are listed in the repository's `DEVIATIONS.md`.
+//! # Not supported
+//!
+//! - The packed (binary) format.
+//! - Writing variable-blocked files; they can be read.
+//! - Blocks containing line breaks (some of moov-io's hard-wrapped sample
+//!   files).
+//!
+//! # Sources
+//!
+//! - **CDIA's [Credit Reporting Resource Guide](https://www.cdiaonline.org/publications/)
+//!   (CRRG), 2020 edition:** record and field layouts; the characters allowed
+//!   in names, addresses and account numbers ([`CharClass`]); the trailer
+//!   block count, which is 0 for files that are not blocked (its fixed-length
+//!   example) and the number of blocks otherwise; and block descriptor words.
+//!   CDIA sells the guide; check these rules against the current edition.
+//! - **[CDIA's announcement](https://www.cdiaonline.org/retirementaccountstatus05/)**
+//!   retiring account status 05 in April 2022, and how to report transfers
+//!   instead.
+//! - **Payment rating rule** ([`AccountStatus::requires_payment_rating`]):
+//!   moov-io/metro2's `ValidatePaymentRating`, Upstart's `metro_2` gem and
+//!   The Mortgage Office's documentation agree; not yet checked against the
+//!   CRRG text.
+//! - **Account status descriptions** ([`AccountStatus`]): Oracle Financial
+//!   Services Lending & Leasing and The Mortgage Office documentation, and the
+//!   `metro_2` gem.
+//! - **[moov-io/metro2](https://github.com/moov-io/metro2):** field positions,
+//!   the trailer totals, and the reference files used in this crate's tests,
+//!   which parse and validate (apart from three character-rule violations in
+//!   the sample data).
 
 mod codes;
 mod data_record;

@@ -163,7 +163,7 @@ fn encode_does_not_mutate_base() {
 
 #[test]
 fn unknown_segment_id_stops_decoding() {
-    // M5: fixed-length files pad records; padding is not a segment.
+    // Fixed-length files pad records; padding is not a segment.
     let raw = format!(
         "{}ZZ{}",
         DataRecord::new(base()).encode().unwrap(),

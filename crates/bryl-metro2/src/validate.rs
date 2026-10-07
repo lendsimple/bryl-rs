@@ -49,7 +49,11 @@ pub enum Violation {
         /// The characters the field allows.
         allowed: CharClass,
     },
-    /// The account status is no longer used for reporting.
+    /// The account status is no longer used for reporting: CDIA retired 05
+    /// in April 2022 (<https://www.cdiaonline.org/retirementaccountstatus05/>).
+    /// Report the status the account had when it was transferred, special
+    /// comment AT (transferred within the company) or O (to another company),
+    /// and zero balance, amount past due and scheduled payment.
     #[error(
         "Account status '{status}' was retired in April 2022; report the status at the time of \
          transfer with special comment AT or O instead"
@@ -60,8 +64,9 @@ pub enum Violation {
     },
 }
 
-/// The characters a Metro 2 text field allows, per the CRRG's field
-/// descriptions.
+/// The characters a Metro 2 text field allows, per the field descriptions in
+/// CDIA's Credit Reporting Resource Guide (2020 edition). The guide also says
+/// alpha fields should be uppercase, which the writer does by default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CharClass {
     /// Consumer name fields: letters, spaces and hyphens ("other than the
@@ -142,7 +147,7 @@ impl AccountStatus {
     /// validator, Upstart's `metro_2` Ruby gem
     /// (`account_status_needs_payment_rating?`) and The Mortgage Office's
     /// Metro 2 documentation. A rating per delinquency status (e.g. `0` for
-    /// 11) is not allowed; see DEVIATIONS.md (M8).
+    /// 11) is not allowed.
     pub const fn requires_payment_rating(self) -> bool {
         matches!(
             self,

@@ -2,7 +2,7 @@
 //!
 //! | `test_bryl.py`                          | Here |
 //! |-----------------------------------------|------|
-//! | `TestContext::*` (global ctx stack)     | `resolve_*`: precedence of field, override and record settings (B4) |
+//! | `TestContext::*` (global ctx stack)     | `resolve_*`: precedence of field, override and record settings |
 //! | `TestAlphanumeric::test_sanitize_*`     | `filter`, `truncate`, `upper`, `combined` |
 
 mod common;

@@ -424,7 +424,7 @@ mod validate {
 
 mod python_files {
     //! Files written by lms-python read correctly; `validate` reports exactly
-    //! the Python quirks fixed in DEVIATIONS.md.
+    //! the Python quirks this crate corrects.
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -432,7 +432,7 @@ mod python_files {
     fn single_entry() {
         let file = File::read(golden("single_entry").as_bytes()).unwrap();
         assert_eq!(file.header.immediate_origin, "9876543210");
-        // N14: Python right-aligned the account number. Decoding keeps the
+        // Python right-aligned the account number. Decoding keeps the
         // field's bytes, so the leading padding survives.
         assert_eq!(
             file.batches[0].entries[0]
@@ -440,7 +440,7 @@ mod python_files {
                 .receiving_dfi_account_number,
             "        123456789"
         );
-        // N3: no filler lines.
+        // No filler lines.
         assert_eq!(
             file.validate()
                 .into_iter()
@@ -457,7 +457,7 @@ mod python_files {
     fn entries_with_addenda() {
         let file = File::read(golden("entries_with_addenda").as_bytes()).unwrap();
         let kinds: Vec<_> = file.validate().into_iter().map(|i| i.kind).collect();
-        // N1: addenda numbered from 0.
+        // Addenda numbered from 0.
         assert_eq!(
             kinds,
             [
@@ -481,7 +481,7 @@ mod python_files {
     fn two_batches() {
         let file = File::read(golden("two_batches").as_bytes()).unwrap();
         assert_eq!(file.batches.len(), 2);
-        // N2: the second batch reuses trace numbers 1 and 2.
+        // The second batch reuses trace numbers 1 and 2.
         let issues = file.validate();
         let duplicates: Vec<_> = issues
             .iter()

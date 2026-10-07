@@ -160,7 +160,7 @@ mod constant {
 
     #[test]
     fn alpha_constant_mismatch_on_decode() {
-        // Python never checked alphanumeric constants on load (B10).
+        // Python never checked alphanumeric constants on load.
         let f = FieldSpec::alpha("id", 0, 2).with_constant_str("J1");
         assert_eq!(
             unpack::<Const>(&f, "J2"),
@@ -373,7 +373,7 @@ mod numeric {
 
     #[test]
     fn strict_digits_only() {
-        // Python's int() accepted " 12" and "+12" (B8).
+        // Python's int() accepted " 12" and "+12".
         assert!(unpack::<u32>(&n(4), "0+12").is_err());
         assert!(unpack::<u32>(&n(4), "0 12").is_err());
         assert!(unpack::<u32>(&n(4), "-012").is_err());
@@ -436,7 +436,7 @@ mod alpha {
 
     #[test]
     fn printable_ascii_only() {
-        // Python's string.printable allowed \t \n \r \x0b \x0c (B6).
+        // Python's string.printable allowed \t \n \r \x0b \x0c.
         for ch in ['\t', '\n', '\r', '\x0b', '\x0c', 'é'] {
             let value = format!("a{ch}");
             assert_eq!(
@@ -457,7 +457,7 @@ mod alpha {
 
     #[test]
     fn decode_does_not_sanitize() {
-        // Python uppercased on load because load re-ran sanitize (B5).
+        // Python uppercased on load because load re-ran sanitize.
         assert_eq!(unpack::<String>(&a(5), "smith").unwrap(), "smith");
     }
 

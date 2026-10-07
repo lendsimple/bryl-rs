@@ -7,7 +7,7 @@
 //! | `TestWriterBlockCount::*`    | `blocks::*` |
 //! | `TestWriterContextErrors::*` | Compile errors now (typestate guards); see the `compile_fail` doctests on `nacha::Writer`. The bad routing number case is `records.rs::routing::bad_format`. |
 //!
-//! Plus the spec-correct rules (N1–N8 in DEVIATIONS.md).
+//! Plus the NACHA rules the writer enforces.
 
 mod common;
 
@@ -65,7 +65,7 @@ mod layout {
 
     #[test]
     fn trace_numbers_continue_across_batches() {
-        // N2: Python restarted at 1 in each batch, duplicating trace numbers.
+        // Python restarted at 1 in each batch, duplicating trace numbers.
         let mut writer = Writer::new(Vec::new());
         let mut file = writer.begin_file(file_params()).unwrap();
         for _ in 0..2 {
@@ -113,7 +113,7 @@ mod layout {
 
     #[test]
     fn addenda_sequence_starts_at_1() {
-        // N1: Python numbered addenda from 0.
+        // Python numbered addenda from 0.
         let mut writer = Writer::new(Vec::new());
         let mut file = writer.begin_file(file_params()).unwrap();
         let mut batch = file
@@ -351,7 +351,7 @@ mod blocks {
 
     #[test]
     fn padded_to_whole_blocks() {
-        // N3: Python wrote no filler lines.
+        // Python wrote no filler lines.
         let output = write_sample_file(10, 100, TransactionCode::CheckingCredit, &[]);
         assert_eq!(output.lines().count(), 20);
         assert_eq!(record_lines(&output).len(), 14);

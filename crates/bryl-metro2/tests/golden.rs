@@ -1,6 +1,6 @@
 //! Byte-for-byte comparison with files written by lms-python's `metro2.py`
 //! (`tools/gen_golden.py`). The one deviation that changes written bytes,
-//! the trailer block count (M6), is applied to the Python output by
+//! the trailer block count, is applied to the Python output by
 //! `zero_block_count`; everything else must match exactly.
 
 mod common;
@@ -23,7 +23,7 @@ fn golden(name: &str) -> String {
     .unwrap()
 }
 
-/// M6: unblocked files report a trailer block count of 0; `metro2.py` wrote
+/// Unblocked files report a trailer block count of 0; `metro2.py` wrote
 /// base records + 2 (trailer positions 57-65).
 fn zero_block_count(mut output: String) -> String {
     let trailer = output.rfind("TRAILER").expect("trailer") - 4;

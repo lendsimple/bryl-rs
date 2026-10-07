@@ -65,8 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The packed (binary) format is not supported, and blocked files can be read
 but not written. The crate documentation (`cargo doc -p bryl-metro2 --open`)
-covers account statuses, the validation rules and reading. Spec decisions are
-listed in the repository's `DEVIATIONS.md`.
+covers account statuses, the validation rules, reading, and the sources for
+each rule.
 
 ## License
 

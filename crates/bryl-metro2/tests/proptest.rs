@@ -46,7 +46,7 @@ fn date() -> impl Strategy<Value = NaiveDate> {
 
 fn base() -> impl Strategy<Value = BaseSegment> {
     (
-        // Status 05 is retired and rejected by the writer (M18).
+        // Status 05 is retired and rejected by the writer.
         proptest::sample::select(
             AccountStatus::ALL
                 .iter()

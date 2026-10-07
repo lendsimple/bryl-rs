@@ -1,7 +1,7 @@
 //! Byte-for-byte comparison with files written by lms-python's `nacha.py`
-//! (`tools/gen_golden.py`). Each intentional difference from DEVIATIONS.md is
-//! applied to the Python output by a named function below, so the remaining
-//! bytes must match exactly.
+//! (`tools/gen_golden.py`). Each place this crate's output intentionally
+//! differs is applied to the Python output by a named function below, so the
+//! remaining bytes must match exactly.
 
 mod common;
 
@@ -17,7 +17,7 @@ fn golden(name: &str) -> String {
     .unwrap()
 }
 
-/// N14: account number (columns 13–29) is left-aligned, not right-aligned.
+/// Account number (columns 13–29) is left-aligned, not right-aligned.
 fn left_align_account_numbers(line: &mut String) {
     if line.starts_with('6') {
         let account = line[12..29].trim().to_owned();
@@ -25,7 +25,7 @@ fn left_align_account_numbers(line: &mut String) {
     }
 }
 
-/// N1: addenda sequence numbers (columns 84–87) start at 1, not 0.
+/// Addenda sequence numbers (columns 84–87) start at 1, not 0.
 fn number_addenda_from_one(line: &mut String) {
     if line.starts_with('7') {
         let sequence: u32 = line[83..87].parse().unwrap();
@@ -33,7 +33,7 @@ fn number_addenda_from_one(line: &mut String) {
     }
 }
 
-/// N2: the trace sequence (last 7 digits of the trace number, and the
+/// The trace sequence (last 7 digits of the trace number, and the
 /// addendum's entry detail sequence number) runs across the whole file
 /// instead of restarting in each batch.
 fn renumber_traces(lines: &mut [String]) {
@@ -48,7 +48,7 @@ fn renumber_traces(lines: &mut [String]) {
     }
 }
 
-/// N3: pad to a multiple of 10 lines with 94 `9`s.
+/// Pad to a multiple of 10 lines with 94 `9`s.
 fn pad_blocks(lines: &mut Vec<String>) {
     while lines.len() % 10 != 0 {
         lines.push("9".repeat(94));

@@ -96,7 +96,7 @@ mod codes {
 
     #[test]
     fn account_status_names_match_their_codes() {
-        // M16: these names were wrong in metro2.py (e.g. 61 was
+        // These names were wrong in metro2.py (e.g. 61 was
         // VOLUNTARY_SURRENDER, DF was DEFERRED). Pin them so a rename can't
         // silently move a name to another code.
         for (status, code) in [
@@ -288,7 +288,7 @@ mod base {
         };
         let raw = b.encode().unwrap();
         assert_eq!(&raw[231..236], "SMITH");
-        // B5: decoding does not change case.
+        // Decoding does not change case.
         let mut lower = raw.clone();
         lower.replace_range(231..236, "smith");
         assert_eq!(
@@ -317,7 +317,7 @@ mod base {
 
     #[test]
     fn unknown_code_rejected_on_read() {
-        // M3: Python never checked codes.
+        // Python never checked codes.
         let mut raw = base().encode().unwrap();
         raw.replace_range(123..125, "99");
         let err = BaseSegment::decode(raw.as_bytes()).unwrap_err();

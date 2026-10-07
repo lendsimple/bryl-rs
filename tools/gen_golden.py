@@ -1,7 +1,7 @@
 """Generate golden files from lms-python's nacha.py and metro2.py.
 
 The Rust tests compare their output with these files, after applying the
-intentional differences listed in DEVIATIONS.md.
+intentional differences described in the tests themselves.
 
 Usage (from the bryl-rs repo root):
 

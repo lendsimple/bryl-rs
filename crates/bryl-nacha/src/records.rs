@@ -27,8 +27,10 @@ pub struct FileHeader {
     /// Routing number of the receiving point, written as ` TTTTAAAAC`.
     #[bryl(numeric(10), pad = ' ')]
     pub immediate_destination: RoutingNumber,
-    /// Usually ` ` plus a routing number, or a 10-digit company ID;
-    /// right-aligned and space-padded.
+    /// Right-aligned and space-padded. NACHA's developer guide describes it
+    /// as the originating bank's routing number "preceded by a blank"
+    /// (` 123456789`); some banks ask for a 10-character company ID instead,
+    /// which is written unchanged. Check your bank's file specification.
     #[bryl(alpha(10), align = "right")]
     pub immediate_origin: String,
     /// Date the file was created.
@@ -139,7 +141,8 @@ pub struct EntryDetail {
     /// Receiving DFI routing number: the TRN (8 digits) and check digit.
     #[bryl(numeric(9))]
     pub receiving_dfi: RoutingNumber,
-    /// Left-aligned and space-padded, like every NACHA alphanumeric field.
+    /// Left-aligned and space-padded, like every NACHA alphanumeric field;
+    /// bank specifications (Chase, Regions, First Citizens) agree.
     #[bryl(alpha(17))]
     pub receiving_dfi_account_number: String,
     /// Amount in cents.
@@ -159,7 +162,9 @@ pub struct EntryDetail {
     #[bryl(numeric(1), max = 1)]
     #[builder(default)]
     pub addenda_record_indicator: u8,
-    /// ODFI ID (8 digits) followed by a 7-digit sequence number.
+    /// ODFI ID (8 digits) followed by a 7-digit sequence number. Trace
+    /// numbers must be ascending (not necessarily consecutive) within a batch
+    /// and unique within the file (NACHA's developer guide).
     #[bryl(numeric(15))]
     pub trace_number: u64,
 }
@@ -199,7 +204,8 @@ pub struct Addendum {
     #[bryl(alpha(80))]
     #[builder(default)]
     pub payment_related_information: String,
-    /// Position of this addendum within its entry, starting at 1.
+    /// Position of this addendum within its entry, starting at 1 (`0001` in
+    /// bank specifications).
     #[bryl(numeric(4))]
     pub addenda_sequence_number: u16,
     /// Last seven digits of the entry's trace number.
@@ -261,7 +267,9 @@ pub struct FileControl {
     /// Number of batches.
     #[bryl(numeric(6))]
     pub batch_count: u32,
-    /// Number of 10-record blocks, including filler records.
+    /// Number of 10-record blocks, including filler records. NACHA's
+    /// developer guide requires files to be padded to whole blocks with
+    /// lines of `9`s.
     #[bryl(numeric(6))]
     pub block_count: u32,
     /// Entry detail plus addenda records covered.

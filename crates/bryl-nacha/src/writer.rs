@@ -106,7 +106,7 @@ pub struct Writer<W> {
 }
 
 /// How each record line ends. NACHA does not specify it; some banks require
-/// CRLF.
+/// CRLF (e.g. First Citizens and Banc of California).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum LineEnding {
     /// `\n` (the default).
@@ -227,7 +227,9 @@ impl<W: Write> Writer<W> {
     }
 
     /// Whether to pad files with filler lines to a multiple of 10 records
-    /// (on by default).
+    /// (on by default). NACHA requires complete blocks, and bank
+    /// specifications treat it as mandatory; turn it off only for a receiver
+    /// that asks.
     #[must_use]
     pub fn pad_blocks(mut self, pad: bool) -> Self {
         self.pad_blocks = pad;

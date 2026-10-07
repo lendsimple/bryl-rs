@@ -1,7 +1,5 @@
-//! Metro 2 code tables, generated from `metro2.py`'s dictionaries. Variant
-//! names are the Python keys in `PascalCase`, except the generation codes
-//! (`II`–`IX` become `Second`–`Ninth`) and the account statuses, whose Python
-//! names were wrong for 61–65, 88, 94–96 and DF (see DEVIATIONS.md, M16).
+//! Metro 2 code tables. Variant names are descriptive `PascalCase` names;
+//! the codes themselves are on each variant.
 
 use bryl::Code;
 
@@ -228,10 +226,20 @@ pub enum AccountType {
     InstallmentLoan,
 }
 
-/// Account status.
+/// Account status: the account's condition as of the date of account
+/// information.
+///
+/// The descriptions follow the Metro 2 documentation of
+/// [Oracle Financial Services Lending & Leasing](https://docs.oracle.com/en/industries/financial-services/financial-lending-leasing/14.12.0.0.0/metro-ii-data-preparation-and-reporting/appendix-handling-metro-ii-account-statuses.html)
+/// and [The Mortgage Office](https://help.themortgageoffice.com/knowledge/account-status-codes),
+/// which agree with Upstart's [`metro_2`](https://github.com/teamupstart/metro_2) gem.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AccountStatus {
     /// `05`: account transferred to another office.
+    ///
+    /// [Retired by CDIA in April 2022](https://www.cdiaonline.org/retirementaccountstatus05/)
+    /// and rejected when writing; see [`crate::Violation::RetiredStatus`].
+    /// Still accepted when reading older files.
     #[code("05")]
     Transferred,
     /// `11`: current account (0–29 days past the due date).
