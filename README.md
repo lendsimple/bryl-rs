@@ -83,7 +83,8 @@ All crates share one version. To release:
 
 1. Bump `version` in `[workspace.package]` and the `bryl`, `bryl-derive`
    and `bryl-pattern` entries in `[workspace.dependencies]` (root
-   `Cargo.toml`), and commit.
+   `Cargo.toml`), move the `Unreleased` entries in `CHANGELOG.md` under the
+   new version with the release date, and commit.
 2. Publish a GitHub release tagged `v<version>` (e.g. `v0.2.0`). The
    `Release` workflow checks the tag against the workspace version and runs
    `cargo publish --workspace`.
