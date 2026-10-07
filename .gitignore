@@ -8,3 +8,6 @@
 *.profraw
 *.profdata
 lcov.info
+
+# Claude Code
+/.claude
