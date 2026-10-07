@@ -87,6 +87,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bryl-metro2"
+version = "0.1.0"
+dependencies = [
+ "bon",
+ "bryl",
+ "chrono",
+ "pretty_assertions",
+ "thiserror",
+]
+
+[[package]]
 name = "bryl-nacha"
 version = "0.1.0"
 dependencies = [

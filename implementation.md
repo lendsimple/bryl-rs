@@ -103,9 +103,11 @@ bryl-rs/
 │   │   └── src/{lib.rs, record.rs, code.rs, attrs.rs}
 │   ├── bryl-pattern/          # date/time pattern tokens, shared by bryl and bryl-derive
 │   ├── bryl-metro2/           # package bryl-metro2, [lib] name = "metro2"
-│   │   ├── src/{lib.rs, codes.rs, header.rs, base.rs, segments.rs, trailer.rs, data_record.rs,
-│   │   │        validate.rs, writer.rs, reader.rs, error.rs}
-│   │   └── tests/{records.rs, writer.rs, reader.rs, roundtrip.rs, moov_fixtures.rs, fixtures/…}
+│   │   ├── src/{lib.rs, codes.rs, records.rs, profile.rs, data_record.rs, trailer.rs,
+│   │   │        validate.rs, writer.rs, reader.rs, file.rs, error.rs}
+│   │   ├── examples/check.rs
+│   │   └── tests/{records.rs, data_record.rs, validate.rs, writer.rs, reader.rs, golden.rs,
+│   │              fixtures/{golden,moov}/…}
 │   └── bryl-nacha/            # package bryl-nacha, [lib] name = "nacha"
 │       ├── src/{lib.rs, codes.rs, records.rs, types.rs, entry.rs, totals.rs, validate.rs,
 │       │        writer.rs, reader.rs, file.rs, error.rs}
@@ -492,7 +494,17 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 - `BaseSegment::validate()` called by the writer
 - RDW above 9999 is an error
 - correct offsets in reader errors
-**Status**: Not Started
+**Status**: Complete. 156 tests: records and codes (43), data records (18), validation (19), writer and trailer totals (28), reader, `File` and moov-io data (41), golden byte comparison (5), doctests (2). Also passes on 1.85. Both moov-io reference files (RDW and newline) parse, and `File::validate` finds that their trailers match ours.
+**Notes** (departures from the design above):
+- **The RDW stays a field (M4).** `BaseSegment::record_descriptor_word: u16`, defaulting to 426, is read from files and recomputed when writing a `DataRecord`. This keeps every field offset equal to the spec's (and the Python tests'). The plan proposed not storing it.
+- **Payment rating (M8):** Python's table is kept as `AccountStatus::required_payment_rating` and is flagged ⚠ in DEVIATIONS. The writer enforces it by default (M7); `Writer::validate(false)` turns that off.
+- **Code tables** were generated from `metro2.py`'s dicts (274 codes; variant names are the Python keys in PascalCase; generation codes `II`–`IX` became `Second`–`Ninth`). The blank payment history code is a space in `PaymentHistoryProfile`, a validated `alpha(24)` newtype.
+- **Stricter decoding (M13, M14):** truncated and repeated segments are errors, as is a record over 9999 characters.
+- **Writer:** `Writer::begin_file(&HeaderRecord)`; Python's keyword parameters (with `date_created` defaulting to `activity_date`) became the `HeaderRecord` builder, where `date_created` is required. Python's `data_record(base, **kwargs)` convenience is dropped. `FileWriter::trailer()` shows the running totals.
+- **Reader:** RDW framing is a format-specific `Source`. `Reader::newline(true)` switches to `LineSource::skip_blank`. `Metro2Record` is header / data record / trailer, and `Reader::segments()` gives Python's flat iteration. `File::read` and `File::validate` were added as in NACHA.
+- **moov-io fixtures** are copied to `tests/fixtures/moov` with moov-io's Apache-2.0 license, so those tests always run (Python skipped them when `~/Web/go-metro2` was absent). Two of them, `j2_segment.dat` and `trailer_record.dat`, are hard-wrapped with newlines and are unwrapped in the test. `header_record.dat` and `base_segment.dat` use block descriptor words (M12, stretch goal).
+- `examples/check.rs` reads and validates a file: `cargo run -p bryl-metro2 --example check -- FILE [--newline]`.
+- `clippy.toml` allows `TransUnion` in docs.
 
 ### Stage 6: Hardening, docs, stretch goals
 **Goal**: production readiness.

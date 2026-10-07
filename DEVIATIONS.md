@@ -47,3 +47,29 @@ N14) to files written by `nacha.py`.
 
 `File::validate` (new) reports N1, N2 and N3 as issues when reading files
 written by `nacha.py`; see `crates/bryl-nacha/tests/reader.rs`.
+
+## metro2
+
+No deviation changes the bytes written for valid input:
+`crates/bryl-metro2/tests/golden.rs` checks that files written by the Rust
+writer are byte-identical to `metro2.py`'s output for the same records.
+The differences are in what is accepted and in the API.
+
+| ID | Python | Rust | Effect |
+|----|--------|------|--------|
+| M2 | A required date set to `None` silently writes `00000000`. | Required dates are `NaiveDate`; only optional dates can be `None`. | Compile error instead of a zero date. |
+| M3 | Code tables are plain dicts that never validate fields. | Code fields are enums. | Unknown codes are rejected on write (by the type) and on read. |
+| M4 | The base segment's record descriptor word is overwritten on a copy when dumping a data record. | Same: `BaseSegment::record_descriptor_word` is read from files, and recomputed when writing a `DataRecord`. | None. (The plan proposed not storing it; it is kept so field offsets match the spec.) |
+| M6 | Trailer totals, including `block_count = base records + 2`. | Same. moov-io's reference file has the same trailer values (`File::validate` reports no differences). ⚠ Not checked against the CRRG. | None. |
+| M7 | `validate_payment_rating`, `validate_amount_past_due` and `validate_payment_history` exist but the writer never calls them. | `Writer` checks each base segment with `BaseSegment::validate` (turn off with `Writer::validate(false)`). | Records breaking these rules are rejected instead of written. |
+| M8 | `PAYMENT_RATING_FOR_STATUS` requires e.g. rating `0` for status `11`. | Same table (`AccountStatus::required_payment_rating`). ⚠ Not checked against the CRRG, which may instead require a blank rating except for statuses 05, 13, 65, 88, 89, 94 and 95. | With M7, a status-11 record without rating `0` is rejected. |
+| M10 | Record type errors always report offset 0. | Errors carry the record's real byte offset (or line number in newline mode). | Better messages. |
+| M12 | Variable-blocked files (block descriptor words) are not supported. | Still not supported. | moov-io's `header_record.dat` and `base_segment.dat` cannot be read. |
+| M13 | `DataRecord.load` (unlike the reader) silently decodes a truncated segment; a repeated K1–N1 segment overwrites the earlier one. | A truncated segment is always an error; a repeated K1, K2, K3, K4, L1 or N1 is an error. | Malformed records are rejected. |
+| M14 | A data record longer than 9999 characters writes a 5-digit record descriptor word. | `Error::RecordTooLong`. | Rejected instead of written corrupt. |
+| M15 | The blank payment history code (`" "`) is an entry in `PaymentHistoryCodes`. | It is a space in `PaymentHistoryProfile`, not a `PaymentHistoryCode` variant (codes cannot be blank). | None. |
+
+Reading follows the bryl rules: text keeps its case (B5; moov-io's
+`n1_segment.dat` reads as `Employer Name`, which Python returned as
+`EMPLOYER NAME`), control characters such as embedded newlines are rejected
+(B6), and reserved fields must be blank (B10).

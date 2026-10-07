@@ -1,0 +1,23 @@
+[package]
+name = "bryl-metro2"
+description = "Metro 2 credit reporting file reading and writing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+name = "metro2"
+
+[dependencies]
+bon.workspace = true
+bryl.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

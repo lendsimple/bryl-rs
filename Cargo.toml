@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/bryl", "crates/bryl-derive", "crates/bryl-nacha", "crates/bryl-pattern"]
+members = [
+    "crates/bryl",
+    "crates/bryl-derive",
+    "crates/bryl-metro2",
+    "crates/bryl-nacha",
+    "crates/bryl-pattern",
+]
 
 [workspace.package]
 version = "0.1.0"
