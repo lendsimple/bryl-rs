@@ -4,8 +4,8 @@ error[E0277]: `String` is not a bryl record
 6 |     inner: String,
   |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
   |
-  = help: the trait `Record` is not implemented for `String`
-help: the trait `Record` is implemented for `Outer`
+  = help: the trait `bryl::Record` is not implemented for `String`
+help: the trait `bryl::Record` is implemented for `Outer`
  --> tests/ui/flatten_not_a_record.rs:3:10
   |
 3 | #[derive(Record)]
@@ -18,8 +18,8 @@ error[E0277]: `String` is not a bryl record
 6 |     inner: String,
   |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
   |
-  = help: the trait `Record` is not implemented for `String`
-help: the trait `Record` is implemented for `Outer`
+  = help: the trait `bryl::Record` is not implemented for `String`
+help: the trait `bryl::Record` is implemented for `Outer`
  --> tests/ui/flatten_not_a_record.rs:3:10
   |
 3 | #[derive(Record)]
@@ -37,8 +37,8 @@ error[E0277]: `String` is not a bryl record
 6 |     inner: String,
   |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
   |
-  = help: the trait `Record` is not implemented for `String`
-help: the trait `Record` is implemented for `Outer`
+  = help: the trait `bryl::Record` is not implemented for `String`
+help: the trait `bryl::Record` is implemented for `Outer`
  --> tests/ui/flatten_not_a_record.rs:3:10
   |
 3 | #[derive(Record)]
@@ -56,8 +56,8 @@ error[E0277]: `String` is not a bryl record
 6 |     inner: String,
   |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
   |
-  = help: the trait `Record` is not implemented for `String`
-help: the trait `Record` is implemented for `Outer`
+  = help: the trait `bryl::Record` is not implemented for `String`
+help: the trait `bryl::Record` is implemented for `Outer`
  --> tests/ui/flatten_not_a_record.rs:3:10
   |
 3 | #[derive(Record)]

@@ -447,7 +447,16 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 **Goal**: `Source`, `LineSource`, `BlockSource`, `Dispatch`, `Reader` (peek, next_if, expect, Iterator), and `ReadError`.
 **Success criteria**: the Tagged A/B line reader and the block reader from `test_bryl.py` behave as in Python, including the EOF default and raise semantics and the peek/retry behavior.
 **Tests**: ports of `TestLineReader`, `TestBlockReader`, and `TestMalformedError`, plus terminator checks (`\n` vs `\r\n`), an unexpected record type leaving the record peeked, and an I/O error surfacing as a `ReadError`.
-**Status**: Not Started
+**Status**: Complete. 27 reader tests plus a module doctest (197 tests in the workspace); clippy pedantic clean; passes on 1.85 apart from the known UI-snapshot wording.
+**Notes** (departures from the design above):
+- Everything lives in `bryl::read`.
+- `Source::next_raw` returns a `ReadErrorKind`; the `Reader` adds the input name and location (`Source::location`) to make a `ReadError`. The error's name field is `source_name`, because thiserror treats a field called `source` as the error's cause.
+- `Dispatch` has a second method, `type_name(&self)`, used in `UnexpectedRecord` errors. Every `Record` implements `Dispatch` through a blanket impl, so a reader of a single record type needs no extra code.
+- `ReadErrorKind` adds `Truncated` (a short final block) and boxes the embedded `bryl::Error` (`Record(Box<Error>)`) to keep `ReadError` under clippy's size limit.
+- `Reader` also has `next_record`, `location`, `error(kind)` (for format crates to raise located errors), `with_name` and `into_inner`.
+- Error handling: a record that fails to decode is consumed with its error, so iteration can continue past it. A record rejected by `expect`/`next_if` stays queued, as Python's `retry` did.
+- `LineSource` options: `expect_terminator(b"\r\n")` (a final unterminated line is still accepted) and `skip_blank(true)` (for Metro 2 newline mode). Python's `include_terminal` tuples are dropped; the terminator is kept on `Raw` for sources but readers yield records only.
+- `BlockSource` reports a short final block as `Truncated` instead of handing it to the decoder, and assembles partial reads.
 
 ### Stage 4: `bryl-nacha`
 **Goal**: records, codes, `RoutingNumber`, `Entry`, the typestate writer, the reader, `File::parse`, and `File::validate`, with N1–N13 applied and documented in `DEVIATIONS.md`.

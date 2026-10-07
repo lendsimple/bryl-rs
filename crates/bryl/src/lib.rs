@@ -62,6 +62,7 @@ pub mod codec;
 mod error;
 mod field;
 pub mod kind;
+pub mod read;
 mod record;
 mod sanitize;
 
