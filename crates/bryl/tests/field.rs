@@ -729,6 +729,13 @@ mod option {
     }
 
     #[test]
+    fn none_date_uses_the_pad() {
+        let f = FieldSpec::date("d", 0, MMDDYYYY).with_pad(b' ');
+        assert_eq!(pack(&f, &None::<NaiveDate>).unwrap(), "        ");
+        assert_eq!(unpack::<Option<NaiveDate>>(&f, "        "), Ok(None));
+    }
+
+    #[test]
     fn zero_date_decodes_as_none() {
         let f = FieldSpec::date("d", 0, MMDDYYYY);
         assert_eq!(unpack::<Option<NaiveDate>>(&f, "00000000"), Ok(None));

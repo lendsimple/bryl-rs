@@ -2,8 +2,9 @@ use super::FieldValue;
 use crate::field::{FieldKind, FieldSpec};
 use crate::{FieldErrorKind, Sanitize};
 
-/// `None` is an empty field: padding for alphanumeric and numeric fields, and
-/// zeros for date and time fields (the Metro 2 "zero date" convention).
+/// `None` is an empty field filled with the padding byte: spaces for
+/// alphanumeric fields, and zeros for numeric, date and time fields unless
+/// they set another pad (zeros give the Metro 2 "zero date" convention).
 ///
 /// On decode, a field that is all spaces, all padding, or (for non-alphanumeric
 /// fields) all zeros is `None`. For a zero-padded numeric field this means
@@ -18,7 +19,7 @@ impl<T: FieldValue> FieldValue for Option<T> {
         if let Some(value) = self {
             return value.encode(spec, sanitize, out);
         }
-        out.resize(out.len() + spec.length, empty_byte(spec));
+        out.resize(out.len() + spec.length, spec.pad);
         Ok(())
     }
 
@@ -29,12 +30,5 @@ impl<T: FieldValue> FieldValue for Option<T> {
             return Ok(None);
         }
         T::decode(spec, raw).map(Some)
-    }
-}
-
-fn empty_byte(spec: &FieldSpec) -> u8 {
-    match spec.kind {
-        FieldKind::Alpha | FieldKind::Numeric { .. } => spec.pad,
-        FieldKind::Date(_) | FieldKind::Time(_) | FieldKind::DateTime(_) => b'0',
     }
 }
