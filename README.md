@@ -77,6 +77,17 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
   cargo +nightly fuzz run metro2_file corpus/metro2_file seeds/metro2_file
   ```
 
+## Releasing
+
+All crates share one version. To release:
+
+1. Bump `version` in `[workspace.package]` and the `bryl`, `bryl-derive`
+   and `bryl-pattern` entries in `[workspace.dependencies]` (root
+   `Cargo.toml`), and commit.
+2. Publish a GitHub release tagged `v<version>` (e.g. `v0.2.0`). The
+   `Release` workflow checks the tag against the workspace version and runs
+   `cargo publish --workspace`.
+
 ## Background
 
 The name and approach come from [bryl](https://github.com/balanced/bryl), a

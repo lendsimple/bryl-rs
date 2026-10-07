@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write # crates.io trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Release tag matches the workspace version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "bryl") | .version')
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::release tag $TAG does not match workspace version v$version"
+            exit 1
+          fi
+      # Trusted publishing needs the crates to exist on crates.io, so the
+      # first release falls back to the CARGO_REGISTRY_TOKEN secret.
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        continue-on-error: true
+      # Publishes every workspace crate in dependency order.
+      - run: cargo publish --workspace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
