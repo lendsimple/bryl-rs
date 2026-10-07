@@ -6,6 +6,10 @@ Fixed-width record files in Rust: a small declarative core, and NACHA (ACH)
 and Metro 2 (credit reporting) built on it. Spec decisions and known
 limitations are listed in [DEVIATIONS.md](DEVIATIONS.md).
 
+The core is a Rust take on [bryl](https://github.com/balanced/bryl), Balanced's
+library for declaratively defining, constructing and serializing fixed-width
+records made of typed fields.
+
 | Crate | Import as | What it is |
 |-------|-----------|------------|
 | [`bryl`](crates/bryl) | `bryl` | Field codecs, `#[derive(Record)]`, `#[derive(Code)]`, line/block readers |
