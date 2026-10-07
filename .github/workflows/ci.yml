@@ -71,6 +71,24 @@ jobs:
       # output follows current stable rustc wording.
       - run: cargo +1.85 test --workspace -- --skip ui --exact
 
+  minimal-versions:
+    name: Test (minimal dependency versions)
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: minimal-versions
+      # Resolve each direct dependency to the lowest version its requirement
+      # allows, so the published floors in Cargo.toml stay honest. Only the
+      # resolution needs nightly; the tests run on stable.
+      - run: cargo +nightly update -Z direct-minimal-versions
+      - run: cargo +stable test --workspace
+
   fuzz:
     name: Fuzz (smoke test)
     runs-on: ubuntu-latest
