@@ -69,8 +69,10 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 - **Compile-error tests** (`crates/bryl/tests/ui`) match current stable rustc
   wording; regenerate with `TRYBUILD=overwrite cargo test -p bryl --test ui`.
-- **Golden files** (`crates/*/tests/fixtures/golden`) are reference outputs
-  the tests compare against byte for byte.
+- **Snapshots** (`crates/*/tests/fixtures/snapshots`) hold the writers'
+  output for fixed scenarios; `tests/snapshots.rs` compares against them
+  byte for byte. After an intended change to written bytes, regenerate with
+  `UPDATE_SNAPSHOTS=1 cargo test --test snapshots` and review the diff.
 - **Fuzzing** (nightly and `cargo install cargo-fuzz`):
   ```sh
   cd fuzz

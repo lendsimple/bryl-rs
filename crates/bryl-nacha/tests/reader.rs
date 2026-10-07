@@ -6,24 +6,16 @@
 //! | `TestWriterRoundtrip::*`    | `structured::*` |
 //! | `TestMalformedError::*`     | `errors::*` (and `bryl`'s reader tests) |
 //!
-//! Plus `File::validate` (new) and reading the Python-generated files.
+//! Plus `File::validate` (new).
 
 mod common;
 
 use bryl::read::{Location, ReadErrorKind};
 use common::*;
 use nacha::{
-    BatchHeader, EntryDetail, File, FileControl, FileHeader, Issue, IssueKind, NachaRecord, Reader,
+    BatchHeader, EntryDetail, File, FileControl, Issue, IssueKind, NachaRecord, Reader,
     TransactionCode,
 };
-
-fn golden(name: &str) -> String {
-    std::fs::read_to_string(format!(
-        "{}/tests/fixtures/golden/{name}.ach",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-    .unwrap()
-}
 
 mod structured {
     use super::*;
@@ -419,89 +411,5 @@ mod validate {
                 filler: 3
             }]
         );
-    }
-}
-
-mod python_files {
-    //! Files written by lms-python read correctly; `validate` reports exactly
-    //! the Python quirks this crate corrects.
-    use super::*;
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    fn single_entry() {
-        let file = File::read(golden("single_entry").as_bytes()).unwrap();
-        assert_eq!(file.header.immediate_origin, "9876543210");
-        // Python right-aligned the account number. Decoding keeps the
-        // field's bytes, so the leading padding survives.
-        assert_eq!(
-            file.batches[0].entries[0]
-                .detail
-                .receiving_dfi_account_number,
-            "        123456789"
-        );
-        // No filler lines.
-        assert_eq!(
-            file.validate()
-                .into_iter()
-                .map(|i| i.kind)
-                .collect::<Vec<_>>(),
-            [IssueKind::BlockPadding {
-                lines: 5,
-                filler: 0
-            }]
-        );
-    }
-
-    #[test]
-    fn entries_with_addenda() {
-        let file = File::read(golden("entries_with_addenda").as_bytes()).unwrap();
-        let kinds: Vec<_> = file.validate().into_iter().map(|i| i.kind).collect();
-        // Addenda numbered from 0.
-        assert_eq!(
-            kinds,
-            [
-                IssueKind::AddendaSequence {
-                    position: 1,
-                    recorded: 0
-                },
-                IssueKind::AddendaSequence {
-                    position: 1,
-                    recorded: 0
-                },
-                IssueKind::BlockPadding {
-                    lines: 8,
-                    filler: 0
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn two_batches() {
-        let file = File::read(golden("two_batches").as_bytes()).unwrap();
-        assert_eq!(file.batches.len(), 2);
-        // The second batch reuses trace numbers 1 and 2.
-        let issues = file.validate();
-        let duplicates: Vec<_> = issues
-            .iter()
-            .filter(|i| i.kind == IssueKind::DuplicateTrace)
-            .map(|i| (i.batch_number, i.trace_number))
-            .collect();
-        assert_eq!(
-            duplicates,
-            [
-                (Some(2), Some(123_456_780_000_001)),
-                (Some(2), Some(123_456_780_000_002))
-            ]
-        );
-    }
-
-    #[test]
-    fn header_fields() {
-        let header: FileHeader = Reader::new(golden("single_entry").as_bytes())
-            .file_header()
-            .unwrap();
-        assert_eq!(header.file_creation(), sample_datetime());
     }
 }

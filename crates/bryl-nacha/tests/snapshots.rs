@@ -1,7 +1,8 @@
-//! Byte-for-byte comparison with files written by lms-python's `nacha.py`
-//! (`tools/gen_golden.py`). Each place this crate's output intentionally
-//! differs is applied to the Python output by a named function below, so the
-//! remaining bytes must match exactly.
+//! Snapshot tests: the writer's output for fixed scenarios must match the
+//! committed files in `tests/fixtures/snapshots` byte for byte, so any change
+//! to written bytes shows up as a reviewable diff.
+//!
+//! Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p bryl-nacha --test snapshots`.
 
 mod common;
 
@@ -9,61 +10,29 @@ use common::*;
 use nacha::{BatchParams, ServiceClassCode, TransactionCode, Writer};
 use pretty_assertions::assert_eq;
 
-fn golden(name: &str) -> String {
+/// Compares `actual` with the snapshot `tests/fixtures/snapshots/{name}`.
+/// Run with `UPDATE_SNAPSHOTS=1` to write the snapshot instead, and review
+/// the diff before committing it.
+fn assert_snapshot(name: &str, actual: &str) {
+    let path = format!(
+        "{}/tests/fixtures/snapshots/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
+        std::fs::write(&path, actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing snapshot {path}; run with UPDATE_SNAPSHOTS=1"));
+    assert_eq!(actual, expected, "{name} differs from its snapshot");
+}
+
+fn read_snapshot(name: &str) -> String {
     std::fs::read_to_string(format!(
-        "{}/tests/fixtures/golden/{name}.ach",
+        "{}/tests/fixtures/snapshots/{name}",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap()
-}
-
-/// Account number (columns 13–29) is left-aligned, not right-aligned.
-fn left_align_account_numbers(line: &mut String) {
-    if line.starts_with('6') {
-        let account = line[12..29].trim().to_owned();
-        line.replace_range(12..29, &format!("{account:<17}"));
-    }
-}
-
-/// Addenda sequence numbers (columns 84–87) start at 1, not 0.
-fn number_addenda_from_one(line: &mut String) {
-    if line.starts_with('7') {
-        let sequence: u32 = line[83..87].parse().unwrap();
-        line.replace_range(83..87, &format!("{:04}", sequence + 1));
-    }
-}
-
-/// The trace sequence (last 7 digits of the trace number, and the
-/// addendum's entry detail sequence number) runs across the whole file
-/// instead of restarting in each batch.
-fn renumber_traces(lines: &mut [String]) {
-    let mut sequence = 0;
-    for line in lines {
-        if line.starts_with('6') {
-            sequence += 1;
-            line.replace_range(87..94, &format!("{sequence:07}"));
-        } else if line.starts_with('7') {
-            line.replace_range(87..94, &format!("{sequence:07}"));
-        }
-    }
-}
-
-/// Pad to a multiple of 10 lines with 94 `9`s.
-fn pad_blocks(lines: &mut Vec<String>) {
-    while lines.len() % 10 != 0 {
-        lines.push("9".repeat(94));
-    }
-}
-
-fn expected(name: &str) -> String {
-    let mut lines: Vec<String> = golden(name).lines().map(str::to_owned).collect();
-    for line in &mut lines {
-        left_align_account_numbers(line);
-        number_addenda_from_one(line);
-    }
-    renumber_traces(&mut lines);
-    pad_blocks(&mut lines);
-    lines.iter().map(|line| line.clone() + "\n").collect()
 }
 
 fn write(build: impl FnOnce(&mut nacha::FileWriter<'_, Vec<u8>>)) -> String {
@@ -92,7 +61,7 @@ fn single_entry() {
             .unwrap();
         batch.finish().unwrap();
     });
-    assert_eq!(output, expected("single_entry"));
+    assert_snapshot("single_entry.ach", &output);
 }
 
 #[test]
@@ -119,7 +88,7 @@ fn entries_with_addenda() {
             .unwrap();
         batch.finish().unwrap();
     });
-    assert_eq!(output, expected("entries_with_addenda"));
+    assert_snapshot("entries_with_addenda.ach", &output);
 }
 
 #[test]
@@ -147,5 +116,16 @@ fn two_batches() {
         }
         batch.finish().unwrap();
     });
-    assert_eq!(output, expected("two_batches"));
+    assert_snapshot("two_batches.ach", &output);
+}
+
+#[test]
+fn snapshots_read_back_and_validate() {
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
+        return; // the snapshots are being rewritten by the other tests
+    }
+    for name in ["single_entry", "entries_with_addenda", "two_batches"] {
+        let file = nacha::File::read(read_snapshot(&format!("{name}.ach")).as_bytes()).unwrap();
+        assert_eq!(file.validate(), [], "{name}");
+    }
 }

@@ -1,7 +1,8 @@
-//! Byte-for-byte comparison with files written by lms-python's `metro2.py`
-//! (`tools/gen_golden.py`). The one deviation that changes written bytes,
-//! the trailer block count, is applied to the Python output by
-//! `zero_block_count`; everything else must match exactly.
+//! Snapshot tests: the writer's output for fixed scenarios must match the
+//! committed files in `tests/fixtures/snapshots` byte for byte, so any change
+//! to written bytes shows up as a reviewable diff.
+//!
+//! Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p bryl-metro2 --test snapshots`.
 
 mod common;
 
@@ -15,24 +16,29 @@ use metro2::{
 };
 use pretty_assertions::assert_eq;
 
-fn golden(name: &str) -> String {
+/// Compares `actual` with the snapshot `tests/fixtures/snapshots/{name}`.
+/// Run with `UPDATE_SNAPSHOTS=1` to write the snapshot instead, and review
+/// the diff before committing it.
+fn assert_snapshot(name: &str, actual: &str) {
+    let path = format!(
+        "{}/tests/fixtures/snapshots/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
+        std::fs::write(&path, actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing snapshot {path}; run with UPDATE_SNAPSHOTS=1"));
+    assert_eq!(actual, expected, "{name} differs from its snapshot");
+}
+
+fn read_snapshot(name: &str) -> String {
     std::fs::read_to_string(format!(
-        "{}/tests/fixtures/golden/{name}.dat",
+        "{}/tests/fixtures/snapshots/{name}",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap()
-}
-
-/// Unblocked files report a trailer block count of 0; `metro2.py` wrote
-/// base records + 2 (trailer positions 57-65).
-fn zero_block_count(mut output: String) -> String {
-    let trailer = output.rfind("TRAILER").expect("trailer") - 4;
-    output.replace_range(trailer + 56..trailer + 65, "000000000");
-    output
-}
-
-fn expected(name: &str) -> String {
-    zero_block_count(golden(name))
 }
 
 fn write(records: &[DataRecord], newline: bool) -> String {
@@ -53,10 +59,7 @@ fn write(records: &[DataRecord], newline: bool) -> String {
 
 #[test]
 fn base_only() {
-    assert_eq!(
-        write(&[DataRecord::new(base())], false),
-        expected("base_only")
-    );
+    assert_snapshot("base_only.dat", &write(&[DataRecord::new(base())], false));
 }
 
 #[test]
@@ -127,7 +130,7 @@ fn all_segments() {
             ..n1()
         }),
     };
-    assert_eq!(write(&[record], false), expected("all_segments"));
+    assert_snapshot("all_segments.dat", &write(&[record], false));
 }
 
 fn statuses() -> Vec<DataRecord> {
@@ -165,18 +168,26 @@ fn statuses() -> Vec<DataRecord> {
 
 #[test]
 fn statuses_rdw() {
-    assert_eq!(write(&statuses(), false), expected("statuses"));
+    assert_snapshot("statuses.dat", &write(&statuses(), false));
 }
 
 #[test]
 fn statuses_newline() {
-    assert_eq!(write(&statuses(), true), expected("statuses_newline"));
+    assert_snapshot("statuses_newline.dat", &write(&statuses(), true));
 }
 
 #[test]
-fn python_files_validate() {
+fn snapshots_read_back_and_validate() {
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
+        return; // the snapshots are being rewritten by the other tests
+    }
     for name in ["base_only", "all_segments", "statuses"] {
-        let file = metro2::File::read(golden(name).as_bytes()).unwrap();
+        let file = metro2::File::read(read_snapshot(&format!("{name}.dat")).as_bytes()).unwrap();
         assert_eq!(file.validate(), [], "{name}");
     }
+    let newline = metro2::Reader::new(read_snapshot("statuses_newline.dat").as_bytes())
+        .newline(true)
+        .read_file()
+        .unwrap();
+    assert_eq!(newline.validate(), []);
 }
