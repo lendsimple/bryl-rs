@@ -13,7 +13,7 @@ use bryl::Record;
 use common::*;
 use metro2::{
     AccountStatus, BaseSegment, DataRecord, EcoaCode, Error, HeaderRecord, J1Segment, J2Segment,
-    TrailerRecord, Violation, Writer,
+    PaymentRating, TrailerRecord, Violation, Writer,
 };
 
 fn trailer_of(records: &[DataRecord]) -> TrailerRecord {
@@ -348,7 +348,7 @@ mod validation {
         let mut writer = Writer::new(Vec::new());
         let mut file = writer.begin_file(&header()).unwrap();
         let bad = DataRecord::new(BaseSegment {
-            payment_rating: None,
+            payment_rating: Some(PaymentRating::Current),
             ..base()
         });
         let err = file.write(&bad).unwrap_err();
@@ -360,11 +360,13 @@ mod validation {
             panic!("expected Invalid, got {err:?}");
         };
         assert_eq!(account, "ACCT-000001");
-        assert!(matches!(violations[..], [Violation::PaymentRating { .. }]));
-        assert!(
-            err.to_string()
-                .starts_with("account ACCT-000001: Account status '11'")
-        );
+        assert!(matches!(
+            violations[..],
+            [Violation::PaymentRatingNotAllowed { .. }]
+        ));
+        assert!(err.to_string().starts_with(
+            "account ACCT-000001: Payment rating must be blank for account status '11'"
+        ));
         assert_eq!(file.trailer().total_base_records, 0);
         file.finish().unwrap();
         assert_eq!(writer.into_inner().len(), 426 * 2);
@@ -375,7 +377,7 @@ mod validation {
         let mut writer = Writer::new(Vec::new()).validate(false);
         let mut file = writer.begin_file(&header()).unwrap();
         file.write(&DataRecord::new(BaseSegment {
-            payment_rating: None,
+            payment_rating: Some(PaymentRating::Current),
             ..base()
         }))
         .unwrap();

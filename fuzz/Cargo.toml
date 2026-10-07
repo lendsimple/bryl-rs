@@ -1,0 +1,27 @@
+[package]
+name = "bryl-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+bryl-metro2 = { path = "../crates/bryl-metro2" }
+bryl-nacha = { path = "../crates/bryl-nacha" }
+
+[[bin]]
+name = "nacha_file"
+path = "fuzz_targets/nacha_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metro2_file"
+path = "fuzz_targets/metro2_file.rs"
+test = false
+doc = false
+bench = false

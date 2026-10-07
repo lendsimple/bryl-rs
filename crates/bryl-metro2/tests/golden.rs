@@ -126,7 +126,6 @@ fn statuses() -> Vec<DataRecord> {
         DataRecord::new(BaseSegment {
             consumer_account_number: "ACCT-002".into(),
             account_status: AccountStatus::ChargeOff,
-            payment_rating: Some(PaymentRating::ChargeOff),
             amount_past_due: 1500,
             original_charge_off_amount: 1500,
             date_of_first_delinquency: Some(date(2020, 1, 15)),
@@ -136,10 +135,16 @@ fn statuses() -> Vec<DataRecord> {
         DataRecord::new(BaseSegment {
             consumer_account_number: "ACCT-003".into(),
             account_status: AccountStatus::DeleteAccount,
-            payment_rating: None,
             ecoa_code: EcoaCode::Delete,
             compliance_condition_code: Some(ComplianceConditionCode::FcraDispute),
             date_closed: Some(date(2020, 7, 31)),
+            ..base()
+        }),
+        DataRecord::new(BaseSegment {
+            consumer_account_number: "ACCT-004".into(),
+            account_status: AccountStatus::PaidOrClosed,
+            payment_rating: Some(PaymentRating::Past30),
+            date_closed: Some(date(2020, 6, 30)),
             ..base()
         }),
     ]

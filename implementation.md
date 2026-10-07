@@ -112,6 +112,7 @@ bryl-rs/
 │       ├── src/{lib.rs, codes.rs, records.rs, types.rs, entry.rs, totals.rs, validate.rs,
 │       │        writer.rs, reader.rs, file.rs, error.rs}
 │       └── tests/{records.rs, writer.rs, reader.rs, golden.rs, fixtures/golden/*.ach}
+├── fuzz/                      # cargo-fuzz targets (nightly; outside the workspace)
 └── tools/gen_golden.py        # regenerates golden files from lms-python
 ```
 
@@ -515,7 +516,22 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 - proptest file-level round-trips (write a random valid file, read it back, compare equal)
 - ⚠ items verified against the specs and the decisions recorded
 - stretch: Metro 2 BDW (variable-blocked) reading, checked against `unpacked_variable_file.dat`
-**Status**: Not Started
+**Status**: Complete. 466 tests in the workspace (269 NACHA and Metro 2 tests also pass on 1.85).
+**Notes:**
+- **Docs:** a root `README.md` and one per crate. The crate docs and the writer/reader docs have runnable examples (bryl, nacha, metro2), and `compile_fail` doctests cover the NACHA typestate.
+- **Examples:** `write_sample` and `check` in both format crates (see Verification).
+- **Property tests** (`crates/bryl-{nacha,metro2}/tests/proptest.rs`):
+  - random valid files (batches, entries and addenda; data records with J1/K1/N1, both framings) read back equal and validate clean;
+  - the Metro 2 trailer equals `TrailerRecord::from_records`;
+  - arbitrary or mutated input never panics.
+- **Fuzzing:** `fuzz/` (outside the workspace) has targets `nacha_file` and `metro2_file`. Seeds are the golden files, the moov-io reference files and moov-io's crasher inputs. Each target ran for 10 minutes with no crashes: 17.1M NACHA inputs and 12.3M Metro 2 inputs. After the M8/N8 rule changes, each ran another minute on the final code (2.3M and 1.4M inputs), also with no crashes.
+- **⚠ items**, researched against public sources (NACHA's developer guide, moov-io/ach and moov-io/metro2 source):
+  - **M8, changed:** the payment rating follows the CRRG rule as moov-io implements it. A rating is required for 05/13/65/88/89/94/95 and must be blank otherwise; Python's per-status table was wrong. The Metro 2 golden scenarios were regenerated with ratings valid under this rule and still match `metro2.py` byte for byte.
+  - **N8, changed:** addenda limits follow moov-io/ach. TRC, ADV, COR, MTE, POS and SHR take no type-05 addenda (COR and MTE/POS/SHR need types 98/02, which are not supported). DNE and ENR need exactly one (`StandardEntryClass::min_addenda`, `IssueKind::TooFewAddenda`).
+  - **N7, confirmed:** right-aligned with a leading blank, per NACHA's developer guide.
+  - **M6, confirmed:** `base records + 2`, as moov-io computes it.
+  - M8 and N8 stay ⚠ in DEVIATIONS.md because they rest on moov-io rather than the paid spec text.
+- **Stretch goal, not done:** block descriptor words. moov-io treats them as part of the packed (binary) format, and its one character-format sample has a block descriptor word before the header only. There is no consistent layout to implement without the CRRG (recorded as M12).
 
 When all stages are complete, `implementation.md` is deleted (per the global CLAUDE.md) and `DEVIATIONS.md` stays.
 
@@ -527,4 +543,4 @@ When all stages are complete, `implementation.md` is deleted (per the global CLA
 2. **Behavioral parity**: every Python test has a Rust counterpart. A mapping table (Python test → Rust test, and "adapted because …" where a deviation applies) is kept at the top of each crate's `tests/` directory and reviewed at the end of each stage.
 3. **Byte-level parity**: `tools/gen_golden.py` runs inside `lms-python` (`cd backend && python ../../bryl-rs/tools/gen_golden.py`) and writes the NACHA and Metro 2 scenarios used in the tests to `crates/*/tests/fixtures/golden/`. The Rust tests diff their own output against these files, with an explicit allow-list of `(line, column range)` deviations taken from `DEVIATIONS.md`.
 4. **External reference data**: the moov-io Metro 2 test data at `~/Web/go-metro2/test/testdata` (header, segments, fixed file, newline request file).
-5. **End to end**: `cargo run -p bryl-nacha --example write_file > /tmp/x.ach`, then `cargo run -p bryl-nacha --example validate /tmp/x.ach` should report no issues. Do the same for `metro2` with `examples/{write,read}_file.rs`.
+5. **End to end**: `cargo run -p bryl-nacha --example write_sample > x.ach`, then `cargo run -p bryl-nacha --example check -- x.ach` should report no issues. Do the same with `-p bryl-metro2` (add `-- --newline` to both for newline framing).

@@ -52,6 +52,16 @@ pub enum IssueKind {
         /// Addenda present.
         count: usize,
     },
+    /// Fewer addenda than the entry class requires.
+    #[error("{standard_entry_class} entries need at least {min} addenda, got {count}")]
+    TooFewAddenda {
+        /// Batch SEC code.
+        standard_entry_class: StandardEntryClass,
+        /// Minimum required.
+        min: u16,
+        /// Addenda present.
+        count: usize,
+    },
     /// The addenda record indicator does not match the addenda present.
     #[error("addenda record indicator is {recorded} but the entry has {count} addenda")]
     AddendaIndicator {
@@ -138,6 +148,14 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
         issues.push(IssueKind::TooManyAddenda {
             standard_entry_class: batch.standard_entry_class,
             max,
+            count: entry.addenda.len(),
+        });
+    }
+    let min = batch.standard_entry_class.min_addenda();
+    if entry.addenda.len() < usize::from(min) {
+        issues.push(IssueKind::TooFewAddenda {
+            standard_entry_class: batch.standard_entry_class,
+            min,
             count: entry.addenda.len(),
         });
     }

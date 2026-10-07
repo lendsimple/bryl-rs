@@ -7,6 +7,7 @@ members = [
     "crates/bryl-nacha",
     "crates/bryl-pattern",
 ]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"

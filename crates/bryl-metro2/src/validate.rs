@@ -11,15 +11,19 @@ use crate::records::BaseSegment;
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum Violation {
-    /// The payment rating does not match the account status.
-    #[error("Account status '{status}' requires payment rating '{expected}', got '{found}'")]
-    PaymentRating {
+    /// The account status requires a payment rating and none is reported.
+    #[error("Account status '{status}' requires a payment rating")]
+    PaymentRatingRequired {
         /// Account status.
         status: AccountStatus,
-        /// Rating the status requires.
-        expected: PaymentRating,
-        /// Rating reported (blank if none).
-        found: String,
+    },
+    /// The account status does not allow a payment rating.
+    #[error("Payment rating must be blank for account status '{status}', got '{rating}'")]
+    PaymentRatingNotAllowed {
+        /// Account status.
+        status: AccountStatus,
+        /// Rating reported.
+        rating: PaymentRating,
     },
     /// Amount past due must be 0 for current and paid accounts.
     #[error("Amount past due must be 0 for status '{status}', got {amount}")]
@@ -50,43 +54,44 @@ pub const fn is_valid_dob(dob: Option<NaiveDate>) -> bool {
 }
 
 impl AccountStatus {
-    /// The payment rating this status requires, if any.
+    /// True for the statuses that must report a payment rating: 05, 13, 65,
+    /// 88, 89, 94 and 95. These close or transfer the account, and the rating
+    /// records its condition just before that. Every other status must leave
+    /// the payment rating blank.
     ///
-    /// This is `metro2.py`'s `PAYMENT_RATING_FOR_STATUS` table. ⚠ It has not
-    /// been checked against the Credit Reporting Resource Guide (CRRG); see
+    /// This follows moov-io/metro2's validator, which matches the Credit
+    /// Reporting Resource Guide as far as public sources show. `metro2.py`
+    /// instead required a rating per delinquency status (e.g. `0` for 11); see
     /// DEVIATIONS.md (M8).
-    pub const fn required_payment_rating(self) -> Option<PaymentRating> {
-        match self {
-            Self::Current | Self::PaidOrClosed => Some(PaymentRating::Current),
-            Self::Dpd30 => Some(PaymentRating::Past30),
-            Self::Dpd60 => Some(PaymentRating::Past60),
-            Self::Dpd90 => Some(PaymentRating::Past90),
-            Self::Dpd120 => Some(PaymentRating::Past120),
-            Self::Dpd150 => Some(PaymentRating::Past150),
-            Self::Dpd180 => Some(PaymentRating::Past180),
-            Self::Collections => Some(PaymentRating::Collection),
-            Self::ChargeOff => Some(PaymentRating::ChargeOff),
-            _ => None,
-        }
+    pub const fn requires_payment_rating(self) -> bool {
+        matches!(
+            self,
+            Self::Transferred
+                | Self::PaidOrClosed
+                | Self::VoluntarySurrenderAlt
+                | Self::ClaimFiled
+                | Self::DeedReceived
+                | Self::GovtClaimInsured
+                | Self::GovtClaimGuaranteed
+        )
     }
 }
 
-/// Checks that the payment rating matches the account status (see
-/// [`AccountStatus::required_payment_rating`]).
+/// Checks the payment rating against the account status: required (any
+/// rating) for the statuses in [`AccountStatus::requires_payment_rating`],
+/// blank for all others.
 ///
 /// # Errors
 ///
-/// Returns [`Violation::PaymentRating`] on a mismatch.
+/// Returns [`Violation::PaymentRatingRequired`] or
+/// [`Violation::PaymentRatingNotAllowed`].
 pub fn validate_payment_rating(
     status: AccountStatus,
     rating: Option<PaymentRating>,
 ) -> Result<(), Violation> {
-    match status.required_payment_rating() {
-        Some(expected) if rating != Some(expected) => Err(Violation::PaymentRating {
-            status,
-            expected,
-            found: rating.map_or_else(|| " ".to_owned(), |r| r.to_string()),
-        }),
+    match (status.requires_payment_rating(), rating) {
+        (true, None) => Err(Violation::PaymentRatingRequired { status }),
+        (false, Some(rating)) => Err(Violation::PaymentRatingNotAllowed { status, rating }),
         _ => Ok(()),
     }
 }

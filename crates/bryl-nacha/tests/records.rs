@@ -446,10 +446,46 @@ mod codes {
     }
 
     #[test]
-    fn max_addenda() {
-        assert_eq!(StandardEntryClass::Ppd.max_addenda(), 1);
-        assert_eq!(StandardEntryClass::Tel.max_addenda(), 0);
-        assert_eq!(StandardEntryClass::Ctx.max_addenda(), 9999);
+    fn addenda_limits() {
+        use StandardEntryClass as Sec;
+        let limits = |classes: &[Sec]| -> Vec<(u16, u16)> {
+            classes
+                .iter()
+                .map(|c| (c.min_addenda(), c.max_addenda()))
+                .collect()
+        };
+        let none = [
+            Sec::Arc,
+            Sec::Pop,
+            Sec::Rck,
+            Sec::Trc,
+            Sec::Xck,
+            Sec::Tel,
+            Sec::Adv,
+            Sec::Cor,
+            Sec::Mte,
+            Sec::Pos,
+            Sec::Shr,
+        ];
+        assert_eq!(limits(&none), vec![(0, 0); none.len()]);
+        let many = [Sec::Ctx, Sec::Atx, Sec::Trx];
+        assert_eq!(limits(&many), vec![(0, 9999); many.len()]);
+        let exactly_one = [Sec::Dne, Sec::Enr];
+        assert_eq!(limits(&exactly_one), vec![(1, 1); exactly_one.len()]);
+        let up_to_one = [
+            Sec::Ppd,
+            Sec::Ccd,
+            Sec::Web,
+            Sec::Cie,
+            Sec::Ack,
+            Sec::Pbr,
+            Sec::Cbr,
+        ];
+        assert_eq!(limits(&up_to_one), vec![(0, 1); up_to_one.len()]);
+        assert_eq!(
+            none.len() + many.len() + exactly_one.len() + up_to_one.len(),
+            Sec::ALL.len()
+        );
     }
 }
 

@@ -3,7 +3,7 @@
 //! | `test_metro2.py`              | Here |
 //! |-------------------------------|------|
 //! | `TestIsValidSSN`/`Phone`/`DOB` | `helpers::*` |
-//! | `TestValidatePaymentRating`   | `payment_rating::*` |
+//! | `TestValidatePaymentRating`   | `payment_rating::*`, rewritten for the CRRG rule (M8) |
 //! | `TestValidateAmountPastDue`   | `amount_past_due::*` |
 //! | `TestValidatePaymentHistory`  | `payment_history::*` |
 //!
@@ -45,94 +45,80 @@ mod helpers {
 }
 
 mod payment_rating {
+    //! Python required e.g. rating `0` for status 11 (M8). The CRRG rule, as
+    //! implemented by moov-io/metro2: a rating is required for 05, 13, 65, 88,
+    //! 89, 94 and 95, and must be blank otherwise.
     use super::*;
     use pretty_assertions::assert_eq;
 
+    const REQUIRED: [&str; 7] = ["05", "13", "65", "88", "89", "94", "95"];
+
     #[test]
-    fn valid() {
-        assert_eq!(
-            validate_payment_rating(AccountStatus::Current, Some(PaymentRating::Current)),
-            Ok(())
-        );
-        assert_eq!(
-            validate_payment_rating(AccountStatus::Dpd30, Some(PaymentRating::Past30)),
-            Ok(())
-        );
-        assert_eq!(
-            validate_payment_rating(AccountStatus::ChargeOff, Some(PaymentRating::ChargeOff)),
-            Ok(())
-        );
+    fn statuses_requiring_a_rating() {
+        let required: Vec<_> = AccountStatus::ALL
+            .iter()
+            .filter(|s| s.requires_payment_rating())
+            .map(AccountStatus::as_code)
+            .collect();
+        assert_eq!(required, REQUIRED);
     }
 
     #[test]
-    fn statuses_without_a_required_rating() {
-        for rating in [
-            None,
-            Some(PaymentRating::Current),
-            Some(PaymentRating::ChargeOff),
-        ] {
+    fn any_rating_when_required() {
+        for &rating in PaymentRating::ALL {
             assert_eq!(
-                validate_payment_rating(AccountStatus::Transferred, rating),
+                validate_payment_rating(AccountStatus::PaidOrClosed, Some(rating)),
                 Ok(())
             );
             assert_eq!(
-                validate_payment_rating(AccountStatus::Deferred, rating),
+                validate_payment_rating(AccountStatus::Transferred, Some(rating)),
                 Ok(())
             );
         }
     }
 
     #[test]
-    fn mismatch() {
+    fn missing_when_required() {
+        let err = validate_payment_rating(AccountStatus::PaidOrClosed, None).unwrap_err();
+        assert_eq!(
+            err,
+            Violation::PaymentRatingRequired {
+                status: AccountStatus::PaidOrClosed
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "Account status '13' requires a payment rating"
+        );
+    }
+
+    #[test]
+    fn blank_otherwise() {
+        for &status in AccountStatus::ALL {
+            if !status.requires_payment_rating() {
+                assert_eq!(validate_payment_rating(status, None), Ok(()), "{status:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn present_when_not_allowed() {
+        // Python required these ratings; the CRRG rule rejects them.
+        for (status, rating) in [
+            (AccountStatus::Current, PaymentRating::Current),
+            (AccountStatus::Dpd30, PaymentRating::Past30),
+            (AccountStatus::ChargeOff, PaymentRating::ChargeOff),
+        ] {
+            assert_eq!(
+                validate_payment_rating(status, Some(rating)),
+                Err(Violation::PaymentRatingNotAllowed { status, rating })
+            );
+        }
         let err = validate_payment_rating(AccountStatus::Current, Some(PaymentRating::Past30))
             .unwrap_err();
-        assert!(
-            err.to_string().contains("requires payment rating '0'"),
-            "{err}"
-        );
-        let err = validate_payment_rating(AccountStatus::Dpd90, Some(PaymentRating::Current))
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("requires payment rating '3'"),
-            "{err}"
-        );
-    }
-
-    #[test]
-    fn missing_rating() {
         assert_eq!(
-            validate_payment_rating(AccountStatus::Current, None),
-            Err(Violation::PaymentRating {
-                status: AccountStatus::Current,
-                expected: PaymentRating::Current,
-                found: " ".into()
-            })
-        );
-    }
-
-    #[test]
-    fn required_ratings_match_python_table() {
-        let table: Vec<_> = AccountStatus::ALL
-            .iter()
-            .filter_map(|s| {
-                s.required_payment_rating()
-                    .map(|r| (s.as_code(), r.as_code()))
-            })
-            .collect();
-        assert_eq!(
-            table,
-            [
-                ("11", "0"),
-                ("13", "0"),
-                ("71", "1"),
-                ("78", "2"),
-                ("80", "3"),
-                ("82", "4"),
-                ("83", "5"),
-                ("84", "6"),
-                ("93", "G"),
-                ("97", "L"),
-            ]
+            err.to_string(),
+            "Payment rating must be blank for account status '11', got '1'"
         );
     }
 }
@@ -256,7 +242,10 @@ mod base_segment {
         };
         let violations = b.validate().unwrap_err();
         assert_eq!(violations.len(), 3);
-        assert!(matches!(violations[0], Violation::PaymentRating { .. }));
+        assert!(matches!(
+            violations[0],
+            Violation::PaymentRatingNotAllowed { .. }
+        ));
         assert!(matches!(
             violations[1],
             Violation::AmountPastDue { amount: 10, .. }

@@ -1,6 +1,7 @@
 [package]
 name = "bryl-metro2"
 description = "Metro 2 credit reporting file reading and writing"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,6 +19,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+proptest.workspace = true
 
 [lints]
 workspace = true

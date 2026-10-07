@@ -13,8 +13,8 @@ use crate::records::{HeaderRecord, TrailerRecord};
 /// ```
 /// use chrono::NaiveDate;
 /// use metro2::{
-///     AccountStatus, AccountType, BaseSegment, DataRecord, EcoaCode, HeaderRecord,
-///     PaymentRating, PortfolioType, Writer,
+///     AccountStatus, AccountType, BaseSegment, DataRecord, EcoaCode, HeaderRecord, PortfolioType,
+///     Writer,
 /// };
 ///
 /// let day = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap();
@@ -32,7 +32,6 @@ use crate::records::{HeaderRecord, TrailerRecord};
 ///     .account_type(AccountType::Unsecured)
 ///     .date_opened(NaiveDate::from_ymd_opt(2019, 6, 15).unwrap())
 ///     .account_status(AccountStatus::Current)
-///     .payment_rating(PaymentRating::Current)
 ///     .date_of_account_information(day)
 ///     .surname("SMITH")
 ///     .first_name("JOHN")

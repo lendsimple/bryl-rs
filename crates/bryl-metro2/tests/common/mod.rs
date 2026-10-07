@@ -29,7 +29,7 @@ pub fn header() -> HeaderRecord {
         .build()
 }
 
-/// Port of `_make_base`, plus the payment rating that status 11 requires.
+/// Port of `_make_base`.
 pub fn base() -> BaseSegment {
     BaseSegment::builder()
         .identification_number("FURNISHER123")
@@ -38,7 +38,6 @@ pub fn base() -> BaseSegment {
         .account_type(AccountType::Unsecured)
         .date_opened(date(2019, 6, 15))
         .account_status(AccountStatus::Current)
-        .payment_rating(PaymentRating::Current)
         .date_of_account_information(date(2020, 8, 20))
         .surname("SMITH")
         .first_name("JOHN")
@@ -50,11 +49,13 @@ pub fn base() -> BaseSegment {
         .build()
 }
 
-/// A base segment with `status` and the payment rating it requires.
+/// A base segment with `status`, and a payment rating if the status requires one.
 pub fn base_with_status(status: AccountStatus) -> BaseSegment {
     BaseSegment {
         account_status: status,
-        payment_rating: status.required_payment_rating(),
+        payment_rating: status
+            .requires_payment_rating()
+            .then_some(PaymentRating::Current),
         ..base()
     }
 }

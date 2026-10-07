@@ -483,6 +483,23 @@ mod rules {
     }
 
     #[test]
+    fn required_addenda() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Dne,
+            entry_params(TransactionCode::CheckingPrenoteCredit, 0, &[]),
+        );
+        assert_eq!(
+            kind,
+            IssueKind::TooFewAddenda {
+                standard_entry_class: StandardEntryClass::Dne,
+                min: 1,
+                count: 0
+            }
+        );
+    }
+
+    #[test]
     fn encoding_error_writes_nothing() {
         let (result, written) = try_entry(
             ServiceClassCode::MixedDebitsAndCredits,

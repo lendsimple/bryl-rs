@@ -1,6 +1,7 @@
 [package]
 name = "bryl"
 description = "Declarative fixed-width record encoding and decoding"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

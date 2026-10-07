@@ -82,6 +82,9 @@ def nacha_scenarios(nacha):
 
 
 def metro2_scenarios(metro2):
+    # Payment ratings follow the CRRG rule the Rust writer enforces (blank
+    # except for statuses 05, 13, 65, 88, 89, 94 and 95), not metro2.py's
+    # PAYMENT_RATING_FOR_STATUS, which metro2.py never enforced anyway.
     day = datetime.date(2020, 8, 20)
 
     def base(**overrides):
@@ -93,7 +96,6 @@ def metro2_scenarios(metro2):
             account_type="01",
             date_opened=datetime.date(2019, 6, 15),
             account_status="11",
-            payment_rating="0",
             date_of_account_information=day,
             surname="SMITH",
             first_name="JOHN",
@@ -196,7 +198,6 @@ def metro2_scenarios(metro2):
                         base=base(
                             consumer_account_number="ACCT-002",
                             account_status="97",
-                            payment_rating="L",
                             amount_past_due=1500,
                             original_charge_off_amount=1500,
                             date_of_first_delinquency=datetime.date(2020, 1, 15),
@@ -207,10 +208,17 @@ def metro2_scenarios(metro2):
                         base=base(
                             consumer_account_number="ACCT-003",
                             account_status="DA",
-                            payment_rating="",
                             ecoa_code="Z",
                             compliance_condition_code="XB",
                             date_closed=datetime.date(2020, 7, 31),
+                        )
+                    ),
+                    metro2.DataRecord(
+                        base=base(
+                            consumer_account_number="ACCT-004",
+                            account_status="13",
+                            payment_rating="1",
+                            date_closed=datetime.date(2020, 6, 30),
                         )
                     ),
                 ],

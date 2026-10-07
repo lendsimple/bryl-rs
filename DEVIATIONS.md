@@ -25,6 +25,9 @@ inventory in `implementation.md`.
 
 ## nacha
 
+Sources for the ⚠ items: [NACHA ACH developer guide](https://achdevguide.nacha.org/ach-file-details),
+[moov-io/ach](https://github.com/moov-io/ach) (`fileHeader.go`, `batch*.go`).
+
 Output differences are verified byte for byte by
 `crates/bryl-nacha/tests/golden.rs`, which applies each one (N1, N2, N3,
 N14) to files written by `nacha.py`.
@@ -37,8 +40,8 @@ N14) to files written by `nacha.py`.
 | N4 | Nesting (`begin_file` / `begin_company_batch` / `entry`) is checked at runtime; `begin_company_batch` never checked for an open file. | Typestate guards; misuse does not compile. | None (API only). |
 | N5 | A batch's service class code is not checked against its entries. | `220` (credits only) rejects debits; `225` (debits only) rejects credits. | Such entries are rejected instead of written. |
 | N6 | Routing numbers are only checked for length; prenote amounts are not checked. | Routing numbers (receiving DFI and immediate destination) must pass the ABA 3-7-1 checksum; prenotes must have a zero amount. | Such values are rejected on write and on read. |
-| N7 | `immediate_origin` is left-aligned, so a 9-digit origin is written `123456789 `. | Right-aligned and space-padded, like `immediate_destination`: ` 123456789`. ⚠ Confirm with the receiving bank. | Differs only for origins shorter than 10 characters. |
-| N8 | Any number of addenda per entry. | Limited by SEC code: 0 for ARC, POP, RCK, TEL, XCK; up to 9,999 for CTX, ATX, TRX; 1 otherwise. ⚠ Verify against the NACHA Operating Rules. | Entries over the limit are rejected. |
+| N7 | `immediate_origin` is left-aligned, so a 9-digit origin is written `123456789 `. | Right-aligned and space-padded, like `immediate_destination`: ` 123456789`. NACHA's developer guide: "the nine-digit routing transit number … preceded by a blank"; moov-io/ach does the same. A 10-character value (e.g. `1` + tax ID) is written unchanged; some banks ask for that. | Differs only for origins shorter than 10 characters. |
+| N8 | Any number of addenda per entry. | Type-05 addenda per SEC code, following moov-io/ach's batch validators: none for ARC, POP, RCK, TRC, XCK, TEL, ADV; none for COR (needs type 98) and MTE, POS, SHR (need type 02), which this library cannot write; exactly one for DNE and ENR; up to 9,999 for CTX, ATX, TRX; at most one otherwise. ⚠ moov-io's behavior, not the NACHA Operating Rules text. | Entries outside the limits are rejected. |
 | N9 | `created_at` defaults to `utcnow()`. | Required; `FileParams::now()` is a convenience. | None (API only). |
 | N12 | Lines may be longer than 94 characters; filler lines are not recognized. | Lines must be exactly 94 characters; `9…9` filler lines are recognized and skipped. | Malformed lines are rejected on read. |
 | N13 | `EntryDetail.mask()` changes the record in place. | `mask()` returns a masked copy. | None (API only). |
@@ -50,24 +53,28 @@ written by `nacha.py`; see `crates/bryl-nacha/tests/reader.rs`.
 
 ## metro2
 
-No deviation changes the bytes written for valid input:
+No deviation changes the bytes written for a record both libraries accept:
 `crates/bryl-metro2/tests/golden.rs` checks that files written by the Rust
-writer are byte-identical to `metro2.py`'s output for the same records.
-The differences are in what is accepted and in the API.
+writer are byte-identical to `metro2.py`'s output for the same records. The
+differences are in what is accepted (most importantly the payment rating
+rule, M8) and in the API.
 
 | ID | Python | Rust | Effect |
 |----|--------|------|--------|
 | M2 | A required date set to `None` silently writes `00000000`. | Required dates are `NaiveDate`; only optional dates can be `None`. | Compile error instead of a zero date. |
 | M3 | Code tables are plain dicts that never validate fields. | Code fields are enums. | Unknown codes are rejected on write (by the type) and on read. |
 | M4 | The base segment's record descriptor word is overwritten on a copy when dumping a data record. | Same: `BaseSegment::record_descriptor_word` is read from files, and recomputed when writing a `DataRecord`. | None. (The plan proposed not storing it; it is kept so field offsets match the spec.) |
-| M6 | Trailer totals, including `block_count = base records + 2`. | Same. moov-io's reference file has the same trailer values (`File::validate` reports no differences). ⚠ Not checked against the CRRG. | None. |
+| M6 | Trailer totals, including `block_count = base records + 2`. | Same, and moov-io computes it the same way (`len(f.Bases) + 2`). The CRRG field is "the number of blocks on the file, if applicable", which only differs for blocked files, and those are not supported (M12). | None. |
 | M7 | `validate_payment_rating`, `validate_amount_past_due` and `validate_payment_history` exist but the writer never calls them. | `Writer` checks each base segment with `BaseSegment::validate` (turn off with `Writer::validate(false)`). | Records breaking these rules are rejected instead of written. |
-| M8 | `PAYMENT_RATING_FOR_STATUS` requires e.g. rating `0` for status `11`. | Same table (`AccountStatus::required_payment_rating`). ⚠ Not checked against the CRRG, which may instead require a blank rating except for statuses 05, 13, 65, 88, 89, 94 and 95. | With M7, a status-11 record without rating `0` is rejected. |
+| M8 | `PAYMENT_RATING_FOR_STATUS` requires a rating per delinquency status (e.g. `0` for 11, `1` for 71, `L` for 97) and allows anything for the others. | The Credit Reporting Resource Guide rule as implemented by moov-io/metro2: a rating (any of `0`–`6`, `G`, `L`) is required for statuses 05, 13, 65, 88, 89, 94 and 95, and must be blank for every other status (`AccountStatus::requires_payment_rating`). ⚠ Based on moov-io's validator and public CRRG summaries, not the CRRG text. | With M7, records following Python's table are rejected: e.g. status 11 with rating `0`. Python never enforced its table, so files the LMS writes today may carry either form. |
 | M10 | Record type errors always report offset 0. | Errors carry the record's real byte offset (or line number in newline mode). | Better messages. |
-| M12 | Variable-blocked files (block descriptor words) are not supported. | Still not supported. | moov-io's `header_record.dat` and `base_segment.dat` cannot be read. |
+| M12 | Variable-blocked files (block descriptor words) are not supported. | Still not supported. moov-io treats block descriptor words as part of the packed (binary) format; its one character-format sample has a block descriptor word before the header only, so there is no consistent layout to implement without the CRRG text. | moov-io's `unpacked_variable_file.dat`, `header_record.dat` and `base_segment.dat` cannot be read. |
 | M13 | `DataRecord.load` (unlike the reader) silently decodes a truncated segment; a repeated K1–N1 segment overwrites the earlier one. | A truncated segment is always an error; a repeated K1, K2, K3, K4, L1 or N1 is an error. | Malformed records are rejected. |
 | M14 | A data record longer than 9999 characters writes a 5-digit record descriptor word. | `Error::RecordTooLong`. | Rejected instead of written corrupt. |
 | M15 | The blank payment history code (`" "`) is an entry in `PaymentHistoryCodes`. | It is a space in `PaymentHistoryProfile`, not a `PaymentHistoryCode` variant (codes cannot be blank). | None. |
+
+Sources for M6 and M8: [moov-io/metro2](https://github.com/moov-io/metro2)
+(`pkg/lib/base_segment.go` `ValidatePaymentRating`, `pkg/file/file_instance.go`).
 
 Reading follows the bryl rules: text keeps its case (B5; moov-io's
 `n1_segment.dat` reads as `Employer Name`, which Python returned as

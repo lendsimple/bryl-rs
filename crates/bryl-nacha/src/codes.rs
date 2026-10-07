@@ -102,17 +102,41 @@ pub enum StandardEntryClass {
 }
 
 impl StandardEntryClass {
-    /// Most addenda records an entry of this class may carry.
+    /// Most type-05 addenda records an entry of this class may carry.
     ///
-    /// Check-conversion, telephone and destroyed-check entries carry none;
-    /// CTX, ATX and TRX carry up to 9,999; everything else carries at most one.
-    /// Verify against the current NACHA Operating Rules before relying on it
-    /// for a class this library has not been used with.
+    /// - None for check conversion (ARC, POP, RCK, TRC, XCK) and TEL.
+    /// - None for ADV, which has no addenda, and for COR (type 98) and MTE,
+    ///   POS and SHR (type 02): this library only writes type-05 addenda, so
+    ///   entries of these classes cannot carry their required addenda.
+    /// - Up to 9,999 for CTX, ATX and TRX.
+    /// - One for everything else.
+    ///
+    /// This follows moov-io/ach's batch validators; PBR and CBR (replaced by
+    /// IAT) are not checked by moov-io and are allowed one.
     pub const fn max_addenda(self) -> u16 {
         match self {
-            Self::Arc | Self::Pop | Self::Rck | Self::Tel | Self::Xck => 0,
+            Self::Arc
+            | Self::Pop
+            | Self::Rck
+            | Self::Trc
+            | Self::Xck
+            | Self::Tel
+            | Self::Adv
+            | Self::Cor
+            | Self::Mte
+            | Self::Pos
+            | Self::Shr => 0,
             Self::Ctx | Self::Atx | Self::Trx => 9999,
             _ => 1,
+        }
+    }
+
+    /// Fewest type-05 addenda records an entry of this class must carry: one
+    /// for DNE and ENR, otherwise none.
+    pub const fn min_addenda(self) -> u16 {
+        match self {
+            Self::Dne | Self::Enr => 1,
+            _ => 0,
         }
     }
 }
