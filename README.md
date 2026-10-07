@@ -1,5 +1,7 @@
 # bryl-rs
 
+[![CI](https://github.com/kolanos/bryl-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kolanos/bryl-rs/actions/workflows/ci.yml)
+
 Fixed-width record files in Rust: a small declarative core, and NACHA (ACH)
 and Metro 2 (credit reporting) built on it. Spec decisions and known
 limitations are listed in [DEVIATIONS.md](DEVIATIONS.md).
