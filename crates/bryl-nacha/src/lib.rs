@@ -225,8 +225,7 @@
 //! open, such as line endings, whether prenotes are accepted, and the
 //! immediate origin value; check your bank's file specification.
 //!
-//! Intentional differences from `lms-python`'s `common/nacha.py`, which this
-//! crate replaces, are listed in the repository's `DEVIATIONS.md`.
+//! Spec decisions are listed in the repository's `DEVIATIONS.md`.
 
 mod codes;
 mod entry;

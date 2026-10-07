@@ -256,8 +256,7 @@
 //! Read errors name the input (set with [`Reader::with_name`]) and the byte
 //! offset or line, e.g. `report.dat @ offset 426 - truncated J1 segment`.
 //!
-//! Intentional differences from `lms-python`'s `common/metro2.py`, which
-//! this crate replaces, are listed in the repository's `DEVIATIONS.md`.
+//! Spec decisions are listed in the repository's `DEVIATIONS.md`.
 
 mod codes;
 mod data_record;
