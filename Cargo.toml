@@ -15,14 +15,14 @@ edition = "2024"
 rust-version = "1.85"
 authors = ["Michael Lavers <kolanos@gmail.com>"]
 license = "MIT"
-publish = false
+repository = "https://github.com/lendsimple/bryl-rs"
 
 [workspace.dependencies]
-bryl = { path = "crates/bryl" }
-bryl-derive = { path = "crates/bryl-derive" }
-bryl-pattern = { path = "crates/bryl-pattern" }
+bryl = { path = "crates/bryl", version = "0.1.0" }
+bryl-derive = { path = "crates/bryl-derive", version = "0.1.0" }
+bryl-pattern = { path = "crates/bryl-pattern", version = "0.1.0" }
 bon = "3"
-chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4.23", default-features = false, features = ["alloc"] }
 thiserror = "2"
 proptest = "1"
 pretty_assertions = "1"

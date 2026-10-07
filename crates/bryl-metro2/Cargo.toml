@@ -7,7 +7,9 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-publish.workspace = true
+repository.workspace = true
+keywords = ["metro2", "credit-reporting", "fixed-width", "cdia"]
+categories = ["encoding", "parser-implementations", "finance"]
 
 [lib]
 name = "metro2"

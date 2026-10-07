@@ -7,7 +7,9 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-publish.workspace = true
+repository.workspace = true
+keywords = ["nacha", "ach", "banking", "fixed-width", "payments"]
+categories = ["encoding", "parser-implementations", "finance"]
 
 [lib]
 name = "nacha"

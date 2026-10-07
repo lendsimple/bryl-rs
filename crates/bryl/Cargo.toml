@@ -7,7 +7,9 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-publish.workspace = true
+repository.workspace = true
+keywords = ["fixed-width", "record", "encoding", "parser", "derive"]
+categories = ["encoding", "parser-implementations"]
 
 [dependencies]
 bryl-derive.workspace = true
