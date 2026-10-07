@@ -1,18 +1,7 @@
-//! Records, codes and value types.
-//!
-//! | `test_nacha.py`                 | Here |
-//! |---------------------------------|------|
-//! | `TestEnum`                      | `codes::*` (Python `Enum` dicts become `#[derive(Code)]` enums) |
-//! | `TestFileHeader` … `TestFileControl` | `records::*` |
-//! | `TestEntryDetail`               | `records::entry_detail_*` |
-//! | `TestTransactionCodeFor`        | `codes::for_entry_*` |
-//! | `TestEntryDetailProperties`     | `codes::predicates_*` |
-//! | `TestEntry`                     | `entry::*` |
-//!
-//! Adapted: `test_routing_number_property` becomes `routing::*`; the
-//! receiving DFI is one validated `RoutingNumber` instead of a TRN plus a
-//! check digit. Python's sample routing number 123456789 fails the ABA
-//! checksum, so these tests use 091000019.
+//! Records (`records`), code tables and transaction code selection
+//! (`codes`), routing numbers and file ID modifiers (`routing`), and entries
+//! with addenda (`entry`). Routing numbers in these tests pass the ABA
+//! checksum (091000019, 021000021, 011000015).
 
 mod common;
 
@@ -143,7 +132,7 @@ mod records {
 
     #[test]
     fn immediate_origin_is_right_aligned() {
-        // Python left-aligned this field.
+        // Right-aligned and space-padded, like the immediate destination.
         let header = FileHeader {
             immediate_origin: "091000019".into(),
             ..file_header()
@@ -191,7 +180,7 @@ mod records {
 
     #[test]
     fn entry_detail_account_number_is_left_aligned() {
-        // Python right-aligned this field.
+        // Left-aligned and space-padded.
         let encoded = entry_detail(TransactionCode::CheckingCredit)
             .encode()
             .unwrap();
@@ -373,7 +362,7 @@ mod codes {
             for_entry(-100, Checking, true, true),
             TransactionCode::CheckingReturnedDebit
         );
-        // Python: is_return wins over a zero amount.
+        // A return takes precedence over a zero amount.
         assert_eq!(
             for_entry(0, Checking, true, false),
             TransactionCode::CheckingReturnedCredit
@@ -381,8 +370,9 @@ mod codes {
     }
 
     #[test]
-    fn for_entry_matches_python_arithmetic() {
-        // Python: base 21/23/22, +5 for debits, +10 for savings.
+    fn for_entry_matches_code_arithmetic() {
+        // Codes are 21/23/22 (return, prenote, credit), +5 for debits and
+        // +10 for savings accounts.
         for account in [AccountKind::Checking, AccountKind::Savings] {
             for amount in [-5i64, 0, 5] {
                 for ret in [false, true] {
@@ -546,7 +536,6 @@ mod routing {
 
     #[test]
     fn bad_format() {
-        // Python: "receiving_dfi_routing_number 1234 length != 9".
         for value in ["1234", "0910000190", "09100001X", ""] {
             assert!(
                 matches!(

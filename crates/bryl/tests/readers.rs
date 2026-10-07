@@ -1,13 +1,6 @@
-//! Readers.
-//!
-//! | `test_bryl.py`          | Here |
-//! |-------------------------|------|
-//! | `TestLineReader::*`     | `line::*` |
-//! | `TestBlockReader::*`    | `block::*` |
-//! | `TestMalformedError::*` | `error::*` |
-//!
-//! Python's `next_record(expected_type, default)` maps to `Reader::expect`
-//! (raise on EOF or wrong type) and `Reader::next_if` (`default=None`).
+//! Readers: line-framed (`line`) and block-framed (`block`) sources, the
+//! lookahead API (`Reader::expect`, `Reader::next_if`, `Reader::peek`) and
+//! read errors (`error`).
 
 mod common;
 
@@ -33,7 +26,7 @@ struct TaggedB {
     value: u32,
 }
 
-/// Port of `_as_record_type_for_line`: dispatch on the first character.
+/// Two record types, told apart by their first character.
 #[derive(Debug, Clone, PartialEq)]
 enum Tagged {
     A(TaggedA),

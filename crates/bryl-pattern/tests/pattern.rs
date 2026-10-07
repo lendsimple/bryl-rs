@@ -1,4 +1,4 @@
-//! Date/time pattern parsing (Python's `Datetime._to_str_format`).
+//! Date/time pattern parsing.
 
 use bryl_pattern::{PatternError, PatternKind, Token, parse_pattern, pattern_width};
 use pretty_assertions::assert_eq;

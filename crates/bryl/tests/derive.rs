@@ -1,11 +1,5 @@
-//! `#[derive(Record)]` and `#[derive(Code)]`.
-//!
-//! | `test_bryl.py`              | Here |
-//! |-----------------------------|------|
-//! | `TestRecordInheritance::*`  | `flatten::*` (composition instead of inheritance, B1) |
-//! | `TestFieldEnum::*`          | `code::*` (enums instead of `enum=` lists/dicts, B12) |
-//! | `TestField::test_value_property` | `record::constant_accessors` |
-//!
+//! `#[derive(Record)]` and `#[derive(Code)]`: generated layouts and options
+//! (`record`), embedded records (`flatten`), and code tables (`code`).
 //! Compile-time errors are covered by `ui.rs` (trybuild).
 
 mod common;
@@ -198,7 +192,7 @@ mod flatten {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    /// Port of `ChildRecord(SampleRecord)` with `extra = Alphanumeric(4)`.
+    /// `SampleRecord` followed by a 4-character alpha field.
     #[derive(Record, Debug, Clone, PartialEq)]
     #[bryl(length = 24)]
     struct ChildRecord {
@@ -436,7 +430,6 @@ mod code {
 
     #[test]
     fn unknown_code_rejected_on_decode() {
-        // Python's Metro 2 code tables never validated fields.
         let err = Coded::decode(b"9922501  ").unwrap_err();
         assert_eq!(
             err,

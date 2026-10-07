@@ -1,4 +1,4 @@
-//! Shared helpers, ported from `test_metro2.py`.
+//! Shared test fixtures.
 
 #![allow(dead_code)]
 
@@ -18,7 +18,7 @@ pub fn datetime(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> NaiveDateTi
     date(y, mo, d).and_hms_opt(h, mi, s).unwrap()
 }
 
-/// Port of `_make_header`.
+/// A minimal valid header.
 pub fn header() -> HeaderRecord {
     HeaderRecord::builder()
         .activity_date(date(2020, 8, 20))
@@ -29,7 +29,7 @@ pub fn header() -> HeaderRecord {
         .build()
 }
 
-/// Port of `_make_base`.
+/// A minimal valid base segment: a current installment account.
 pub fn base() -> BaseSegment {
     BaseSegment::builder()
         .identification_number("FURNISHER123")
@@ -60,7 +60,7 @@ pub fn base_with_status(status: AccountStatus) -> BaseSegment {
     }
 }
 
-/// Port of `_make_j1`.
+/// A minimal J1 segment (co-borrower at the same address).
 pub fn j1() -> J1Segment {
     J1Segment::builder()
         .surname("SMITH")
@@ -69,7 +69,7 @@ pub fn j1() -> J1Segment {
         .build()
 }
 
-/// Port of `_make_j2`.
+/// A minimal J2 segment (co-borrower at a different address).
 pub fn j2() -> J2Segment {
     J2Segment::builder()
         .surname("JONES")
@@ -138,7 +138,7 @@ pub fn all_segments() -> DataRecord {
 
 pub const ALL_SEGMENTS_LENGTH: usize = 426 + 100 + 200 + 34 + 34 + 40 + 30 + 54 + 146;
 
-/// Port of `_write_file`.
+/// Writes a complete file (header, `records`, trailer) and returns it.
 pub fn write_file(records: &[DataRecord], newline: bool) -> String {
     let mut writer = Writer::new(Vec::new()).newline(newline);
     let header = HeaderRecord {

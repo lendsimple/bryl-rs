@@ -1,14 +1,8 @@
-//! Reader, `File` and reference data.
-//!
-//! | `test_metro2.py`              | Here |
-//! |-------------------------------|------|
-//! | `TestMalformedError`          | `malformed::*` (errors are `bryl::read::ReadError`) |
-//! | `TestReader`                  | `structured::*` |
-//! | `TestReaderOptionalSegments`  | `segments::*` |
-//! | `TestReaderNewlineMode`       | `newline::*` |
-//! | `TestReaderMalformed`         | `malformed::*` |
-//! | `TestRoundtrip`               | `roundtrip::*` |
-//! | `TestGoTestData*`             | `moov::*` (fixtures copied into `tests/fixtures/moov`, so these always run) |
+//! Reading: structured reading (`structured`), appended segments
+//! (`segments`), newline mode (`newline`), malformed input (`malformed`),
+//! round trips (`roundtrip`), `File::validate` (`validate`), moov-io's
+//! reference files (`moov`, copied into `tests/fixtures/moov`), and
+//! variable-blocked files (`blocked`).
 
 mod common;
 
@@ -653,8 +647,7 @@ mod moov {
         K3Segment::decode(fixture("moov/k3_segment.dat").as_bytes()).unwrap();
         L1Segment::decode(fixture("moov/l1_segment.dat").as_bytes()).unwrap();
         let n1 = N1Segment::decode(fixture("moov/n1_segment.dat").as_bytes()).unwrap();
-        // Python's test expected "EMPLOYER NAME" only because loading
-        // uppercased; the file says "Employer Name".
+        // Decoding keeps the file's case.
         assert_eq!(n1.employer_name, "Employer Name");
     }
 

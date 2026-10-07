@@ -1,12 +1,6 @@
-//! Record-level tests against hand-written `Record` impls.
-//!
-//! | `test_bryl.py`                   | Here |
-//! |----------------------------------|------|
-//! | `TestRecord::*`                  | `sample::*` |
-//! | `TestRecordProbe::*`             | `probe::*` |
-//! | `TestField::test_get_returns_constant`, `test_fill_skips_constant` | `tagged::constants_*` |
-//! | `TestRecord::test_unknown_field_raises`, `test_is_dict_subclass`, `TestField::test_set_constant_raises` | Not applicable: struct fields are checked by the compiler. |
-//! | `TestRecordInheritance`          | Stage 2 (`#[bryl(flatten)]`) |
+//! Record-level tests: encoding, decoding, layout and errors (`sample`),
+//! probing (`probe`), and constants, sanitizing and optional dates
+//! (`tagged`).
 
 mod common;
 

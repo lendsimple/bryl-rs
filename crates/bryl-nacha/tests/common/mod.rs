@@ -1,4 +1,4 @@
-//! Shared helpers, ported from `test_nacha.py`.
+//! Shared test fixtures.
 
 #![allow(dead_code)]
 
@@ -30,7 +30,7 @@ pub fn other_routing() -> RoutingNumber {
     "021000021".parse().unwrap()
 }
 
-/// Port of `_make_entry_detail`, with a valid routing number.
+/// A minimal valid entry detail.
 pub fn entry_detail(transaction_code: TransactionCode) -> EntryDetail {
     EntryDetail::builder()
         .transaction_code(transaction_code)
@@ -81,7 +81,7 @@ pub fn entry_params(
         .build()
 }
 
-/// Port of `_write_sample_file`: one mixed batch of identical entries.
+/// Writes a file with one mixed batch of identical entries and returns it.
 pub fn write_sample_file(
     entry_count: usize,
     amount: u64,

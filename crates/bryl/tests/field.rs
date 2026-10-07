@@ -1,20 +1,12 @@
-//! Field-level tests.
+//! Field-level encoding and decoding: field specs (`field_spec`), constant
+//! and reserved fields (`constant`), padding and alignment (`pack_unpack`),
+//! field lookup within a record (`probe`), numeric, alphanumeric, date, time
+//! and datetime values, and optional values (`option`). Sanitizing is in
+//! `sanitize.rs`.
 //!
-//! | `test_bryl.py`             | Here |
-//! |----------------------------|------|
-//! | `TestField`                | `field_spec::*`, `constant::*` |
-//! | `TestFieldPackUnpack`      | `pack_unpack::*` |
-//! | `TestFieldProbe`           | `probe::*` (byte slices instead of seekable IO, B14) |
-//! | `TestNumeric`              | `numeric::*` |
-//! | `TestAlphanumeric`         | `alpha::*` (sanitize cases are in `sanitize.rs`) |
-//! | `TestDatetime`             | `datetime::*` |
-//! | `TestDate`                 | `date::*` |
-//! | `TestTime`                 | `time::*` |
-//! | `TestFieldEnum`            | Stage 2 (`#[derive(Code)]`) |
-//!
-//! Adapted: Python's runtime type checks ("must be a string", "must be a
-//! number", "must be a datetime") are enforced by the Rust type system, so
-//! those tests become kind-mismatch tests.
+//! A value of the wrong Rust type for a field's kind is a compile error with
+//! the derive; these tests cover the runtime check behind it
+//! (`KindMismatch`).
 
 mod common;
 
@@ -121,7 +113,7 @@ mod constant {
 
     #[test]
     fn reserved_has_no_effect_on_dates() {
-        // Python raises TypeError("does not have a default"); the derive makes
+        // Dates have no filler value; the derive makes
         // this a compile error (Stage 2).
         let f = FieldSpec::date("d", 0, MMDDYYYY).reserved();
         assert_eq!(f.constant, None);
@@ -160,7 +152,7 @@ mod constant {
 
     #[test]
     fn alpha_constant_mismatch_on_decode() {
-        // Python never checked alphanumeric constants on load.
+        // Alphanumeric constants are checked on decode, like numeric ones.
         let f = FieldSpec::alpha("id", 0, 2).with_constant_str("J1");
         assert_eq!(
             unpack::<Const>(&f, "J2"),
@@ -293,7 +285,6 @@ mod probe {
 
     #[test]
     fn short_input_is_length_error() {
-        // Python: unpack("123") on Numeric(10) -> "Length must be >= 10".
         let f = FieldSpec::numeric("n", 0, 10);
         assert_eq!(
             codec::decode_field::<SampleRecord, u32>(&f, b"123"),
@@ -373,7 +364,7 @@ mod numeric {
 
     #[test]
     fn strict_digits_only() {
-        // Python's int() accepted " 12" and "+12".
+        // Only ASCII digits after the padding: no signs or inner spaces.
         assert!(unpack::<u32>(&n(4), "0+12").is_err());
         assert!(unpack::<u32>(&n(4), "0 12").is_err());
         assert!(unpack::<u32>(&n(4), "-012").is_err());
@@ -436,7 +427,8 @@ mod alpha {
 
     #[test]
     fn printable_ascii_only() {
-        // Python's string.printable allowed \t \n \r \x0b \x0c.
+        // Printable ASCII only: tabs, line breaks and other control or
+        // non-ASCII characters are rejected.
         for ch in ['\t', '\n', '\r', '\x0b', '\x0c', 'é'] {
             let value = format!("a{ch}");
             assert_eq!(
@@ -457,7 +449,7 @@ mod alpha {
 
     #[test]
     fn decode_does_not_sanitize() {
-        // Python uppercased on load because load re-ran sanitize.
+        // Decoding never sanitizes.
         assert_eq!(unpack::<String>(&a(5), "smith").unwrap(), "smith");
     }
 
@@ -516,7 +508,7 @@ mod datetime {
 
     #[test]
     fn metro2_timestamp() {
-        // MMDDYYYYhhmmss, see test_metro2.py::test_timestamp_format.
+        // MMDDYYYYhhmmss, the Metro 2 base segment timestamp.
         let pattern: &[Token] = &[
             Token::Month,
             Token::Day,
@@ -547,7 +539,7 @@ mod datetime {
 
     #[test]
     fn twelve_hour_without_ampm_is_am() {
-        // Matches Python's strptime %I without %p.
+        // Without an AM/PM token, a 12-hour value is read as AM.
         let pattern: &[Token] = &[Token::Hour12, Token::Minute];
         let spec = FieldSpec::time("t", 0, pattern);
         assert_eq!(unpack::<NaiveTime>(&spec, "1200"), Ok(time(0, 0, 0)));
@@ -625,7 +617,7 @@ mod date {
 
     #[test]
     fn short_year_decodes_as_2000s() {
-        // Python's strptime pivot gives 69-99 -> 19xx; we always use 20xx.
+        // Two-digit years are always 20xx; there is no pivot to 19xx.
         let f = FieldSpec::date("d", 0, YYMMDD);
         assert_eq!(unpack::<NaiveDate>(&f, "990101"), Ok(date(2099, 1, 1)));
         assert_eq!(unpack::<NaiveDate>(&f, "000229"), Ok(date(2000, 2, 29)));

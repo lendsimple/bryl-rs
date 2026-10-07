@@ -130,8 +130,8 @@ fn render<T>(
     Ok(())
 }
 
-/// Components read from a raw value. Missing components default like Python's
-/// `strptime`: 1900-01-01 00:00:00.
+/// Components read from a raw value. Missing components default to
+/// 1900-01-01 00:00:00.
 #[derive(Default)]
 struct Parsed {
     year: Option<i32>,
@@ -217,7 +217,7 @@ impl Parsed {
                 if !(1..=12).contains(&hour) {
                     return None;
                 }
-                // Without `pp`, treat as AM, as Python's strptime does.
+                // Without `pp`, treat as AM.
                 match (hour, self.pm.unwrap_or(false)) {
                     (12, false) => 0,
                     (12, true) => 12,

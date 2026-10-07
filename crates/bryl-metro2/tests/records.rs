@@ -1,16 +1,6 @@
-//! Records, segments and code tables.
-//!
-//! | `test_metro2.py`                              | Here |
-//! |-----------------------------------------------|------|
-//! | `TestEnum`, `TestCodeTables`                  | `codes::*` (dicts become `#[derive(Code)]` enums) |
-//! | `TestHeaderRecord`                            | `header::*` |
-//! | `TestBaseSegment`, `TestMetro2Date`, `TestMetro2Timestamp` | `base::*` |
-//! | `TestJ1Segment` … `TestN1Segment`             | `segments::*` |
-//! | `TestTrailerRecord`                           | `trailer::*` |
-//! | `TestSegmentRegistry`                         | `segments::lengths` |
-//! | `TestRecordCopy`                              | `base::clone` (records are `Clone`) |
-//! | `TestFieldOffsets`                            | `offsets::*` |
-//! | `TestExports`                                 | Not applicable: exports are checked by the compiler. |
+//! Records and segments: code tables (`codes`), header (`header`), base
+//! segment with its dates and timestamps (`base`), appended segments
+//! (`segments`), trailer (`trailer`) and field offsets (`offsets`).
 
 mod common;
 
@@ -48,7 +38,7 @@ mod codes {
         assert_eq!(AccountType::ALL.len(), 66);
         assert_eq!(AccountStatus::ALL.len(), 23);
         assert_eq!(PaymentRating::ALL.len(), 9);
-        // 17 in Python, minus the blank code (a space in the profile).
+        // The blank code is a space in the profile, not a variant.
         assert_eq!(PaymentHistoryCode::ALL.len(), 16);
         assert_eq!(EcoaCode::ALL.len(), 9);
         assert_eq!(ConsumerInformationIndicator::ALL.len(), 25);
@@ -317,7 +307,6 @@ mod base {
 
     #[test]
     fn unknown_code_rejected_on_read() {
-        // Python never checked codes.
         let mut raw = base().encode().unwrap();
         raw.replace_range(123..125, "99");
         let err = BaseSegment::decode(raw.as_bytes()).unwrap_err();

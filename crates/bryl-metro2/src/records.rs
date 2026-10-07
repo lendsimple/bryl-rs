@@ -1,8 +1,7 @@
 //! Metro 2 records and segments (character format).
 //!
-//! Field positions follow `metro2.py`, which were checked against the
-//! moov-io/metro2 Go implementation. Optional fields default to blanks, zeros
-//! or `None` (zero-filled dates), as in Python.
+//! Field positions match moov-io/metro2's Go implementation. Optional fields
+//! default to blanks, zeros or `None` (zero-filled dates).
 
 use bon::Builder;
 use bryl::{Const, Record};

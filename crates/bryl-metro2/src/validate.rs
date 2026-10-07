@@ -1,4 +1,4 @@
-//! Metro 2 field rules, ported from `metro2.py`'s validation helpers.
+//! Metro 2 field rules.
 
 use chrono::NaiveDate;
 use thiserror::Error;

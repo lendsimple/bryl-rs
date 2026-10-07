@@ -1,9 +1,5 @@
-//! Sanitize tests.
-//!
-//! | `test_bryl.py`                          | Here |
-//! |-----------------------------------------|------|
-//! | `TestContext::*` (global ctx stack)     | `resolve_*`: precedence of field, override and record settings |
-//! | `TestAlphanumeric::test_sanitize_*`     | `filter`, `truncate`, `upper`, `combined` |
+//! Sanitizing: precedence of field, encode-time and record settings
+//! (`resolve_*`) and the filter, truncate and upper steps.
 
 mod common;
 

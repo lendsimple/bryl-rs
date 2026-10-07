@@ -1,8 +1,5 @@
-//! `DataRecord`.
-//!
-//! | `test_metro2.py`  | Here |
-//! |-------------------|------|
-//! | `TestDataRecord`  | all tests in this file |
+//! `DataRecord`: the record descriptor word, segment order, decoding,
+//! truncated and repeated segments, and the length limit.
 
 mod common;
 

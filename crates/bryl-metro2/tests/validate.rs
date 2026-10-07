@@ -1,14 +1,7 @@
-//! Validation helpers.
-//!
-//! | `test_metro2.py`              | Here |
-//! |-------------------------------|------|
-//! | `TestIsValidSSN`/`Phone`/`DOB` | `helpers::*` |
-//! | `TestValidatePaymentRating`   | `payment_rating::*`, rewritten for the CRRG rule |
-//! | `TestValidateAmountPastDue`   | `amount_past_due::*` |
-//! | `TestValidatePaymentHistory`  | `payment_history::*` |
-//!
-//! Plus `BaseSegment::validate` (new; the Python writer never called the
-//! helpers, M7).
+//! Validation: the SSN, phone and date-of-birth helpers (`helpers`), payment
+//! rating (`payment_rating`), amount past due (`amount_past_due`), payment
+//! history profile (`payment_history`), `BaseSegment::validate`
+//! (`base_segment`) and character rules (`characters`).
 
 mod common;
 
@@ -45,9 +38,8 @@ mod helpers {
 }
 
 mod payment_rating {
-    //! Python required e.g. rating `0` for status 11. The CRRG rule, as
-    //! implemented by moov-io/metro2: a rating is required for 05, 13, 65, 88,
-    //! 89, 94 and 95, and must be blank otherwise.
+    //! A rating is required for statuses 05, 13, 65, 88, 89, 94 and 95, and
+    //! must be blank otherwise.
     use super::*;
     use pretty_assertions::assert_eq;
 
@@ -103,7 +95,7 @@ mod payment_rating {
 
     #[test]
     fn present_when_not_allowed() {
-        // Python required these ratings; the CRRG rule rejects them.
+        // A rating with a status that does not take one is rejected.
         for (status, rating) in [
             (AccountStatus::Current, PaymentRating::Current),
             (AccountStatus::Dpd30, PaymentRating::Past30),

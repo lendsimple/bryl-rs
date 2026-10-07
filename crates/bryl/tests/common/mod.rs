@@ -5,8 +5,8 @@
 use bryl::{Const, FieldSpec, FieldValue, Record, Sanitize, Token};
 use chrono::NaiveDate;
 
-/// Port of `SampleRecord` from `test_bryl.py`:
-/// `alpha = Alphanumeric(10)`, `num = Numeric(5)`, `filler = Alphanumeric(5).reserved()`.
+/// A 20-character record: a 10-character alpha field, a 5-digit number and
+/// 5 characters of reserved filler.
 #[derive(Record, Debug, Clone, PartialEq)]
 #[bryl(length = 20)]
 pub struct SampleRecord {

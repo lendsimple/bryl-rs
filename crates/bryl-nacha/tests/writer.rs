@@ -1,13 +1,7 @@
-//! Writer.
-//!
-//! | `test_nacha.py`              | Here |
-//! |------------------------------|------|
-//! | `TestWriter::*`              | `layout::*`, `totals::*` |
-//! | `TestWriterEntryHash::*`     | `totals::entry_hash*` |
-//! | `TestWriterBlockCount::*`    | `blocks::*` |
-//! | `TestWriterContextErrors::*` | Compile errors now (typestate guards); see the `compile_fail` doctests on `nacha::Writer`. The bad routing number case is `records.rs::routing::bad_format`. |
-//!
-//! Plus the NACHA rules the writer enforces.
+//! Writing: record layout, numbering and sanitizing (`layout`), control
+//! totals and entry hashes (`totals`), block count and filler (`blocks`), and
+//! the NACHA rules the writer enforces (`rules`). Misusing the nesting is a
+//! compile error; see the `compile_fail` doctests on `nacha::Writer`.
 
 mod common;
 
@@ -65,7 +59,7 @@ mod layout {
 
     #[test]
     fn trace_numbers_continue_across_batches() {
-        // Python restarted at 1 in each batch, duplicating trace numbers.
+        // The sequence runs across the file, so trace numbers stay unique.
         let mut writer = Writer::new(Vec::new());
         let mut file = writer.begin_file(file_params()).unwrap();
         for _ in 0..2 {
@@ -113,7 +107,6 @@ mod layout {
 
     #[test]
     fn addenda_sequence_starts_at_1() {
-        // Python numbered addenda from 0.
         let mut writer = Writer::new(Vec::new());
         let mut file = writer.begin_file(file_params()).unwrap();
         let mut batch = file
@@ -351,7 +344,6 @@ mod blocks {
 
     #[test]
     fn padded_to_whole_blocks() {
-        // Python wrote no filler lines.
         let output = write_sample_file(10, 100, TransactionCode::CheckingCredit, &[]);
         assert_eq!(output.lines().count(), 20);
         assert_eq!(record_lines(&output).len(), 14);
@@ -637,7 +629,7 @@ mod rules {
 
     #[test]
     fn dropped_file_writes_no_control() {
-        // Python: an exception inside `with begin_file` skipped the file control.
+        // Dropping the guard abandons the file without a file control.
         let mut writer = Writer::new(Vec::new());
         let file = writer.begin_file(file_params()).unwrap();
         drop(file);

@@ -1,12 +1,6 @@
-//! Reader, `File` and validation.
-//!
-//! | `test_nacha.py`             | Here |
-//! |-----------------------------|------|
-//! | `TestReader::*`             | `structured::*`, `flat::*` |
-//! | `TestWriterRoundtrip::*`    | `structured::*` |
-//! | `TestMalformedError::*`     | `errors::*` (and `bryl`'s reader tests) |
-//!
-//! Plus `File::validate` (new).
+//! Reading: structured reading and `File::read` (`structured`), flat
+//! iteration (`flat`), read errors (`errors`), and `File::validate`
+//! (`validate`).
 
 mod common;
 

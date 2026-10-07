@@ -1,11 +1,6 @@
-//! Writer.
-//!
-//! | `test_metro2.py`            | Here |
-//! |-----------------------------|------|
-//! | `TestWriter`                | `layout::*` |
-//! | `TestWriterTrailerTotals`   | `totals::*` |
-//! | `TestWriterErrors`          | Compile errors now (typestate guards); see the doctests on `metro2::Writer`. Plus `validation::*`. |
-//! | `TestWriterNewlineMode`     | `newline::*` |
+//! Writing: file layout (`layout`), trailer totals (`totals`), validation of
+//! each record before writing (`validation`), and newline mode (`newline`).
+//! Writing outside a file is a compile error.
 
 mod common;
 
