@@ -1,0 +1,5 @@
+error: declared length 10 does not match the sum of the field lengths, 2
+ --> tests/ui/length_mismatch.rs:4:17
+  |
+4 | #[bryl(length = 10)]
+  |                 ^^

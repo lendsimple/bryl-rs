@@ -1,0 +1,11 @@
+error: `min` only applies to numeric fields
+ --> tests/ui/bounds_on_alpha.rs:5:28
+  |
+5 |     #[bryl(alpha(2), min = 1, max = 5)]
+  |                            ^
+
+error: `max` only applies to numeric fields
+ --> tests/ui/bounds_on_alpha.rs:5:37
+  |
+5 |     #[bryl(alpha(2), min = 1, max = 5)]
+  |                                     ^

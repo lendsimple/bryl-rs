@@ -1,0 +1,5 @@
+error: unknown token at index 6 of pattern "MMDDYYY"; expected YYYY, YY, MM, DD, DDD, JJJ, hh, HH, mm, ss, pp or punctuation
+ --> tests/ui/bad_pattern.rs:5:17
+  |
+5 |     #[bryl(date("MMDDYYY"))]
+  |                 ^^^^^^^^^

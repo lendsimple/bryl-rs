@@ -1,0 +1,5 @@
+error: unknown record attribute; expected `sanitize(...)` or `length = N`
+ --> tests/ui/unknown_record_attribute.rs:4:8
+  |
+4 | #[bryl(size = 2)]
+  |        ^^^^

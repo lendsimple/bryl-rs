@@ -1,0 +1,5 @@
+error: sanitize settings only apply to alpha fields
+ --> tests/ui/sanitize_on_numeric.rs:5:12
+  |
+5 |     #[bryl(numeric(2), sanitize(upper))]
+  |            ^^^^^^^

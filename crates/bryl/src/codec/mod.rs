@@ -6,7 +6,9 @@ mod datetime;
 mod numeric;
 mod option;
 
+pub use alpha::{decode_alpha, encode_alpha};
 pub(crate) use constant::encode_constant;
+pub use numeric::{decode_numeric, encode_numeric};
 
 use crate::field::{Align, FieldSpec};
 use crate::record::{EncodeCx, Record};
@@ -81,6 +83,64 @@ pub fn decode_field<R: Record, T: FieldValue>(spec: &FieldSpec, raw: &[u8]) -> R
         actual: raw.len(),
     })?;
     T::decode(spec, bytes).map_err(|kind| field_error::<R>(spec, kind))
+}
+
+/// Encodes a record embedded in record `R` at `offset` (`#[bryl(flatten)]`).
+///
+/// The embedded record uses its own sanitize defaults unless `cx` overrides
+/// them. Errors are reported against `R`, with offsets relative to `R`.
+///
+/// # Errors
+///
+/// Returns the embedded record's first encoding error.
+pub fn encode_flattened<R: Record, T: Record>(
+    offset: usize,
+    value: &T,
+    cx: &EncodeCx,
+    out: &mut Vec<u8>,
+) -> Result<(), Error> {
+    let start = out.len();
+    value.encode_into(cx, out).map_err(|err| {
+        out.truncate(start);
+        reparent::<R>(offset, err, None)
+    })
+}
+
+/// Decodes a record embedded in record `R` at `offset` (`#[bryl(flatten)]`).
+///
+/// # Errors
+///
+/// Returns [`Error::Length`] if `raw` does not cover the embedded record, or
+/// its first invalid field, reported against `R`.
+pub fn decode_flattened<R: Record, T: Record>(offset: usize, raw: &[u8]) -> Result<T, Error> {
+    let bytes = raw.get(offset..offset + T::LENGTH).ok_or(Error::Length {
+        record: R::NAME,
+        expected: R::LENGTH,
+        actual: raw.len(),
+    })?;
+    T::decode_fields(bytes).map_err(|err| reparent::<R>(offset, err, Some(raw.len())))
+}
+
+/// Re-attributes an embedded record's error to the outer record `R`.
+fn reparent<R: Record>(offset: usize, err: Error, raw_len: Option<usize>) -> Error {
+    match err {
+        Error::Field {
+            field,
+            offset: inner,
+            kind,
+            ..
+        } => Error::Field {
+            record: R::NAME,
+            field,
+            offset: offset + inner,
+            kind,
+        },
+        Error::Length { actual, .. } => Error::Length {
+            record: R::NAME,
+            expected: R::LENGTH,
+            actual: raw_len.unwrap_or(actual),
+        },
+    }
 }
 
 fn field_error<R: Record>(spec: &FieldSpec, kind: FieldErrorKind) -> Error {

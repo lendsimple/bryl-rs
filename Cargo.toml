@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bryl"]
+members = ["crates/bryl", "crates/bryl-derive", "crates/bryl-pattern"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,10 +10,14 @@ authors = ["Michael Lavers <kolanos@gmail.com>"]
 publish = false
 
 [workspace.dependencies]
+bryl = { path = "crates/bryl" }
+bryl-derive = { path = "crates/bryl-derive" }
+bryl-pattern = { path = "crates/bryl-pattern" }
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
 thiserror = "2"
 proptest = "1"
 pretty_assertions = "1"
+trybuild = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

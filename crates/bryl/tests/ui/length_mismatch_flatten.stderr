@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: Outer: declared length 10 does not match the sum of the field lengths
+  --> tests/ui/length_mismatch_flatten.rs:10:17
+   |
+10 | #[bryl(length = 10)]
+   |                 ^^ evaluation of `_` failed here

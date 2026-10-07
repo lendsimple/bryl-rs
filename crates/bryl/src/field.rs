@@ -1,5 +1,5 @@
-use crate::pattern::{Token, pattern_width};
 use crate::sanitize::Sanitize;
+use bryl_pattern::{Token, pattern_width};
 
 /// Which side of a field a value is aligned to; padding fills the other side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -211,6 +211,14 @@ impl FieldSpec {
     #[must_use]
     pub const fn with_sanitize(mut self, sanitize: Sanitize) -> Self {
         self.sanitize = Some(sanitize);
+        self
+    }
+
+    /// Returns a copy moved `by` bytes later, for records embedded in other
+    /// records.
+    #[must_use]
+    pub const fn shifted(mut self, by: usize) -> Self {
+        self.offset += by;
         self
     }
 

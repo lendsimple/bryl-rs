@@ -1,0 +1,11 @@
+error: expected "left" or "right"
+ --> tests/ui/bad_align_and_pad.rs:5:30
+  |
+5 |     #[bryl(alpha(2), align = "center")]
+  |                              ^^^^^^^^
+
+error: expected a printable ASCII character such as `' '`
+ --> tests/ui/bad_align_and_pad.rs:7:28
+  |
+7 |     #[bryl(alpha(2), pad = 'é')]
+  |                            ^^^

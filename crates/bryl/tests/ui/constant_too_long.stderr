@@ -1,0 +1,11 @@
+error: constant 999 has 3 digits, more than the field length 2
+ --> tests/ui/constant_too_long.rs:5:35
+  |
+5 |     #[bryl(numeric(2), constant = 999)]
+  |                                   ^^^
+
+error: constant "HEADER" is 6 characters, longer than the field length 2
+ --> tests/ui/constant_too_long.rs:7:33
+  |
+7 |     #[bryl(alpha(2), constant = "HEADER")]
+  |                                 ^^^^^^^^

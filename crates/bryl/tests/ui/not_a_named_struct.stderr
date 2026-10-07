@@ -1,0 +1,17 @@
+error: `#[derive(Record)]` needs a struct with named fields
+ --> tests/ui/not_a_named_struct.rs:4:13
+  |
+4 | struct Tuple(String);
+  |             ^^^^^^^^
+
+error: `#[derive(Record)]` only supports structs
+ --> tests/ui/not_a_named_struct.rs:7:6
+  |
+7 | enum E {
+  |      ^
+
+error: `#[derive(Record)]` does not support generic structs
+  --> tests/ui/not_a_named_struct.rs:12:15
+   |
+12 | struct Generic<T> {
+   |               ^

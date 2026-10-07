@@ -1,0 +1,70 @@
+error[E0277]: `String` is not a bryl record
+ --> tests/ui/flatten_not_a_record.rs:6:12
+  |
+6 |     inner: String,
+  |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
+  |
+  = help: the trait `Record` is not implemented for `String`
+help: the trait `Record` is implemented for `Outer`
+ --> tests/ui/flatten_not_a_record.rs:3:10
+  |
+3 | #[derive(Record)]
+  |          ^^^^^^
+  = note: this error originates in the derive macro `Record` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `String` is not a bryl record
+ --> tests/ui/flatten_not_a_record.rs:6:12
+  |
+6 |     inner: String,
+  |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
+  |
+  = help: the trait `Record` is not implemented for `String`
+help: the trait `Record` is implemented for `Outer`
+ --> tests/ui/flatten_not_a_record.rs:3:10
+  |
+3 | #[derive(Record)]
+  |          ^^^^^^
+note: required by a bound in `encode_flattened`
+ --> src/codec/mod.rs
+  |
+  | pub fn encode_flattened<R: Record, T: Record>(
+  |                                       ^^^^^^ required by this bound in `encode_flattened`
+  = note: this error originates in the derive macro `Record` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `String` is not a bryl record
+ --> tests/ui/flatten_not_a_record.rs:6:12
+  |
+6 |     inner: String,
+  |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
+  |
+  = help: the trait `Record` is not implemented for `String`
+help: the trait `Record` is implemented for `Outer`
+ --> tests/ui/flatten_not_a_record.rs:3:10
+  |
+3 | #[derive(Record)]
+  |          ^^^^^^
+note: required by a bound in `decode_flattened`
+ --> src/codec/mod.rs
+  |
+  | pub fn decode_flattened<R: Record, T: Record>(offset: usize, raw: &[u8]) -> Result<T, Error> {
+  |                                       ^^^^^^ required by this bound in `decode_flattened`
+  = note: this error originates in the derive macro `Record` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `String` is not a bryl record
+ --> tests/ui/flatten_not_a_record.rs:6:12
+  |
+6 |     inner: String,
+  |            ^^^^^^ only records can be flattened; add `#[derive(bryl::Record)]` to `String`
+  |
+  = help: the trait `Record` is not implemented for `String`
+help: the trait `Record` is implemented for `Outer`
+ --> tests/ui/flatten_not_a_record.rs:3:10
+  |
+3 | #[derive(Record)]
+  |          ^^^^^^
+note: required by a bound in `bryl::__private::assert_record`
+ --> src/lib.rs
+  |
+  |     pub const fn assert_record<T: crate::Record>() {}
+  |                                   ^^^^^^^^^^^^^ required by this bound in `assert_record`
+  = note: this error originates in the derive macro `Record` (in Nightly builds, run with -Z macro-backtrace for more info)

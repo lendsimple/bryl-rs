@@ -1,0 +1,11 @@
+error: numeric constants must be integers
+ --> tests/ui/constant_wrong_kind.rs:5:35
+  |
+5 |     #[bryl(numeric(2), constant = "AB")]
+  |                                   ^^^^
+
+error: alpha constants must be strings
+ --> tests/ui/constant_wrong_kind.rs:7:33
+  |
+7 |     #[bryl(alpha(2), constant = 12)]
+  |                                 ^^

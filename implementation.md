@@ -12,7 +12,7 @@ We are building an equivalent Rust library in the empty repo `/Users/kolanos/Web
 
 | Decision | Choice |
 |---|---|
-| Packaging | Cargo workspace: `bryl`, `bryl-derive`, `bryl-metro2`, `bryl-nacha` |
+| Packaging | Cargo workspace: `bryl`, `bryl-derive`, `bryl-pattern`, `bryl-metro2`, `bryl-nacha` |
 | Record DSL | `#[derive(Record)]` (and `#[derive(Code)]` for code tables) on typed structs and enums |
 | Output fidelity | **Spec-correct**: fix the quirks the Python code has, and document each deviation from Python |
 | Dates | `chrono` (`NaiveDate`, `NaiveTime`, `NaiveDateTime`) |
@@ -100,7 +100,8 @@ bryl-rs/
 │   │   │        sanitize.rs, error.rs, read/{mod,line,block,dispatch}.rs}
 │   │   └── tests/{field.rs, record.rs, readers.rs, derive.rs, ui/*.rs (trybuild)}
 │   ├── bryl-derive/           # proc-macro: #[derive(Record)], #[derive(Code)]
-│   │   └── src/{lib.rs, record.rs, code.rs, attrs.rs, pattern.rs}
+│   │   └── src/{lib.rs, record.rs, code.rs, attrs.rs}
+│   ├── bryl-pattern/          # date/time pattern tokens, shared by bryl and bryl-derive
 │   ├── bryl-metro2/           # package bryl-metro2, [lib] name = "metro2"
 │   │   ├── src/{lib.rs, codes.rs, header.rs, base.rs, segments.rs, trailer.rs, data_record.rs,
 │   │   │        validate.rs, writer.rs, reader.rs, error.rs}
@@ -431,7 +432,16 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 **Goal**: both derives with every attribute in the table above, compile-time offsets and length assertions, constant accessors, and `flatten`.
 **Success criteria**: the Stage 1 hand-written fixture is replaced by a derived one with identical behavior, and trybuild UI tests cover every compile error listed.
 **Tests**: ports of `TestRecord`, `TestRecordInheritance` (via `flatten`), `TestRecordProbe`, and `TestFieldEnum` (via `Code`), plus constant mismatch on decode (B10) and decode not mutating (B5).
-**Status**: Not Started
+**Status**: Complete. 26 derive tests and 27 trybuild compile-fail cases, on top of the Stage 1 suites (now using derived fixtures); clippy pedantic clean; all non-UI tests pass on 1.85.
+**Notes** (departures from the design above):
+- The date-pattern tokenizer moved to a new crate, `bryl-pattern`, shared by `bryl` (re-exported) and `bryl-derive` (compile-time pattern errors).
+- **Added:** kind marker traits in `bryl::kind` (`AlphaField`, `NumericField`, `DateField`, `TimeField`, `DateTimeField`). The derive requires the field type to implement the marker for its kind, so `#[bryl(numeric(5))] name: String` is a compile error pointing at the type. Custom `FieldValue` types implement the matching marker.
+- **Dropped:** per-field `pub const <FIELD>_OFFSET` constants, which would add ~50 public items to `BaseSegment`. `Record::field(name) -> Option<&FieldSpec>` gives the same information. Per-constant accessors (`K1Segment::SEGMENT_IDENTIFIER`) are generated as planned.
+- `length = N` is checked by the macro itself when there are no flattened fields, and by a `const` assertion otherwise.
+- A flattened record encodes with its own `SANITIZE` default unless the caller overrides it; its errors are reported against the outer record with outer offsets.
+- `#[derive(Code)]` generates inherent `ALL`/`as_code`/`from_code` plus `Display`, `FromStr`, `TryFrom`, `FieldValue` and the kind marker. There is no `Code` trait (nothing needs to be generic over code tables yet). String codes cannot start or end with a space, because padding is stripped on decode; Metro 2's blank payment-history code (`" "`) must be handled inside `PaymentHistoryProfile` instead.
+- Error type for bad codes: `bryl::UnknownCode { type_name, code }`.
+- The trybuild snapshots follow current stable rustc wording (see `tests/ui.rs`).
 
 ### Stage 3: `bryl` readers
 **Goal**: `Source`, `LineSource`, `BlockSource`, `Dispatch`, `Reader` (peek, next_if, expect, Iterator), and `ReadError`.

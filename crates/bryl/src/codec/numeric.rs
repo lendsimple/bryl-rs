@@ -2,8 +2,14 @@ use super::{FieldValue, kind_mismatch, pad_into, show, strip};
 use crate::field::{FieldKind, FieldSpec};
 use crate::{FieldErrorKind, Sanitize};
 
-/// Validates `value` against the field and writes its padded digits.
-pub(super) fn encode_number(
+/// Writes `value` into a numeric field: checks the digit count and the
+/// field's bounds, then pads.
+///
+/// # Errors
+///
+/// Returns [`FieldErrorKind::TooLong`], [`FieldErrorKind::BelowMin`] or
+/// [`FieldErrorKind::AboveMax`].
+pub fn encode_numeric(
     spec: &FieldSpec,
     value: u64,
     out: &mut Vec<u8>,
@@ -20,8 +26,14 @@ pub(super) fn encode_number(
     Ok(())
 }
 
-/// Strips padding and parses the remaining ASCII digits; blank is zero.
-pub(super) fn decode_number(spec: &FieldSpec, raw: &[u8]) -> Result<u64, FieldErrorKind> {
+/// Reads a numeric field: strips padding and parses the remaining ASCII
+/// digits (blank is zero), then checks the field's bounds.
+///
+/// # Errors
+///
+/// Returns [`FieldErrorKind::NotNumeric`], [`FieldErrorKind::Overflow`],
+/// [`FieldErrorKind::BelowMin`] or [`FieldErrorKind::AboveMax`].
+pub fn decode_numeric(spec: &FieldSpec, raw: &[u8]) -> Result<u64, FieldErrorKind> {
     let digits = strip(spec, raw);
     if !digits.iter().all(u8::is_ascii_digit) {
         return Err(FieldErrorKind::NotNumeric { raw: show(digits) });
@@ -65,14 +77,14 @@ macro_rules! impl_unsigned {
                 if !matches!(spec.kind, FieldKind::Numeric { .. }) {
                     return Err(kind_mismatch::<Self>(spec));
                 }
-                encode_number(spec, u64::from(*self), out)
+                encode_numeric(spec, u64::from(*self), out)
             }
 
             fn decode(spec: &FieldSpec, raw: &[u8]) -> Result<Self, FieldErrorKind> {
                 if !matches!(spec.kind, FieldKind::Numeric { .. }) {
                     return Err(kind_mismatch::<Self>(spec));
                 }
-                let value = decode_number(spec, raw)?;
+                let value = decode_numeric(spec, raw)?;
                 Self::try_from(value).map_err(|_| FieldErrorKind::Overflow {
                     raw: value.to_string(),
                     target: stringify!($ty),

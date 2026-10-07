@@ -1,0 +1,63 @@
+error[E0277]: `String` cannot be stored in a `numeric` field
+ --> tests/ui/wrong_type_for_kind.rs:6:8
+  |
+6 |     a: String,
+  |        ^^^^^^ use `u8`, `u16`, `u32`, `u64`, a `#[derive(Code)]` enum with integer codes, or an `Option` of one
+  |
+  = help: the trait `NumericField` is not implemented for `String`
+  = help: the following other types implement trait `NumericField`:
+            Option<T>
+            bryl::Const
+            u16
+            u32
+            u64
+            u8
+note: required by a bound in `bryl::__private::assert_numeric`
+ --> src/lib.rs
+  |
+  |     pub const fn assert_numeric<T: NumericField>() {}
+  |                                    ^^^^^^^^^^^^ required by this bound in `assert_numeric`
+
+error[E0277]: `u32` cannot be stored in an `alpha` field
+ --> tests/ui/wrong_type_for_kind.rs:8:8
+  |
+8 |     b: u32,
+  |        ^^^ use `String`, a `#[derive(Code)]` enum with string codes, or an `Option` of one
+  |
+  = help: the trait `AlphaField` is not implemented for `u32`
+help: the following other types implement trait `AlphaField`
+ --> src/kind.rs
+  |
+  | impl AlphaField for String {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ `String`
+  | impl AlphaField for Const {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ `bryl::Const`
+...
+  | impl<T: AlphaField> AlphaField for Option<T> {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<T>`
+note: required by a bound in `bryl::__private::assert_alpha`
+ --> src/lib.rs
+  |
+  |     pub const fn assert_alpha<T: AlphaField>() {}
+  |                                  ^^^^^^^^^^ required by this bound in `assert_alpha`
+
+error[E0277]: `NaiveDateTime` cannot be stored in a `date` field
+  --> tests/ui/wrong_type_for_kind.rs:10:8
+   |
+10 |     c: chrono::NaiveDateTime,
+   |        ^^^^^^^^^^^^^^^^^^^^^ use `chrono::NaiveDate` or `Option<chrono::NaiveDate>`
+   |
+   = help: the trait `DateField` is not implemented for `NaiveDateTime`
+help: the following other types implement trait `DateField`
+  --> src/kind.rs
+   |
+   | impl DateField for NaiveDate {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NaiveDate`
+...
+   | impl<T: DateField> DateField for Option<T> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Option<T>`
+note: required by a bound in `bryl::__private::assert_date`
+  --> src/lib.rs
+   |
+   |     pub const fn assert_date<T: DateField>() {}
+   |                                 ^^^^^^^^^ required by this bound in `assert_date`

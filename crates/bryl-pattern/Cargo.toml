@@ -1,6 +1,6 @@
 [package]
-name = "bryl"
-description = "Declarative fixed-width record encoding and decoding"
+name = "bryl-pattern"
+description = "Date/time pattern tokens shared by bryl and bryl-derive"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,15 +8,10 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
-bryl-derive.workspace = true
-bryl-pattern.workspace = true
-chrono.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
 pretty_assertions.workspace = true
-trybuild.workspace = true
 
 [lints]
 workspace = true

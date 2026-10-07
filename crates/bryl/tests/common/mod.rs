@@ -1,42 +1,21 @@
-//! Shared test fixtures. Stage 2 replaces these hand-written `Record` impls
-//! with `#[derive(Record)]`.
+//! Shared test fixtures.
 
 #![allow(dead_code)]
 
-use bryl::{Const, EncodeCx, Error, FieldSpec, FieldValue, Record, Sanitize, Token, codec};
+use bryl::{Const, FieldSpec, FieldValue, Record, Sanitize, Token};
 use chrono::NaiveDate;
 
 /// Port of `SampleRecord` from `test_bryl.py`:
 /// `alpha = Alphanumeric(10)`, `num = Numeric(5)`, `filler = Alphanumeric(5).reserved()`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Record, Debug, Clone, PartialEq)]
+#[bryl(length = 20)]
 pub struct SampleRecord {
+    #[bryl(alpha(10))]
     pub alpha: String,
+    #[bryl(numeric(5))]
     pub num: u32,
+    #[bryl(alpha(5), reserved)]
     pub filler: Const,
-}
-
-impl Record for SampleRecord {
-    const NAME: &'static str = "SampleRecord";
-    const LENGTH: usize = 20;
-    const FIELDS: &'static [FieldSpec] = &[
-        FieldSpec::alpha("alpha", 0, 10),
-        FieldSpec::numeric("num", 10, 5),
-        FieldSpec::alpha("filler", 15, 5).reserved(),
-    ];
-
-    fn encode_into(&self, cx: &EncodeCx, out: &mut Vec<u8>) -> Result<(), Error> {
-        codec::encode_field::<Self, _>(&Self::FIELDS[0], &self.alpha, cx, out)?;
-        codec::encode_field::<Self, _>(&Self::FIELDS[1], &self.num, cx, out)?;
-        codec::encode_field::<Self, _>(&Self::FIELDS[2], &self.filler, cx, out)
-    }
-
-    fn decode_fields(raw: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
-            alpha: codec::decode_field::<Self, _>(&Self::FIELDS[0], raw)?,
-            num: codec::decode_field::<Self, _>(&Self::FIELDS[1], raw)?,
-            filler: codec::decode_field::<Self, _>(&Self::FIELDS[2], raw)?,
-        })
-    }
 }
 
 impl SampleRecord {
@@ -53,40 +32,17 @@ pub const MMDDYYYY: &[Token] = &[Token::Month, Token::Day, Token::Year4];
 
 /// An uppercasing record with a constant tag, an optional zero-filled date and
 /// a field-level sanitize override, modeled on Metro 2 segments.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Record, Debug, Clone, PartialEq)]
+#[bryl(sanitize(upper), length = 22)]
 pub struct TaggedRecord {
+    #[bryl(alpha(2), constant = "K1")]
     pub tag: Const,
+    #[bryl(alpha(6))]
     pub name: String,
+    #[bryl(alpha(6), no_sanitize)]
     pub raw_name: String,
+    #[bryl(date("MMDDYYYY"))]
     pub closed: Option<NaiveDate>,
-}
-
-impl Record for TaggedRecord {
-    const NAME: &'static str = "TaggedRecord";
-    const LENGTH: usize = 2 + 6 + 6 + 8;
-    const FIELDS: &'static [FieldSpec] = &[
-        FieldSpec::alpha("tag", 0, 2).with_constant_str("K1"),
-        FieldSpec::alpha("name", 2, 6),
-        FieldSpec::alpha("raw_name", 8, 6).with_sanitize(Sanitize::NONE),
-        FieldSpec::date("closed", 14, MMDDYYYY),
-    ];
-    const SANITIZE: Sanitize = Sanitize::UPPER;
-
-    fn encode_into(&self, cx: &EncodeCx, out: &mut Vec<u8>) -> Result<(), Error> {
-        codec::encode_field::<Self, _>(&Self::FIELDS[0], &self.tag, cx, out)?;
-        codec::encode_field::<Self, _>(&Self::FIELDS[1], &self.name, cx, out)?;
-        codec::encode_field::<Self, _>(&Self::FIELDS[2], &self.raw_name, cx, out)?;
-        codec::encode_field::<Self, _>(&Self::FIELDS[3], &self.closed, cx, out)
-    }
-
-    fn decode_fields(raw: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
-            tag: codec::decode_field::<Self, _>(&Self::FIELDS[0], raw)?,
-            name: codec::decode_field::<Self, _>(&Self::FIELDS[1], raw)?,
-            raw_name: codec::decode_field::<Self, _>(&Self::FIELDS[2], raw)?,
-            closed: codec::decode_field::<Self, _>(&Self::FIELDS[3], raw)?,
-        })
-    }
 }
 
 /// Encodes a single field value without sanitizing.

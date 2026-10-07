@@ -1,0 +1,5 @@
+error: `hh` is not allowed in a date pattern
+ --> tests/ui/wrong_pattern_kind.rs:5:17
+  |
+5 |     #[bryl(date("YYYYMMDDhhmm"))]
+  |                 ^^^^^^^^^^^^^^

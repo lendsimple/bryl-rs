@@ -1,0 +1,17 @@
+error: code table variants cannot have fields
+ --> tests/ui/code_shape.rs:6:6
+  |
+6 |     A(u8),
+  |      ^^^^
+
+error: a code table needs at least one variant
+  --> tests/ui/code_shape.rs:10:6
+   |
+10 | enum Empty {}
+   |      ^^^^^
+
+error: `#[derive(Code)]` only supports enums
+  --> tests/ui/code_shape.rs:13:8
+   |
+13 | struct NotEnum;
+   |        ^^^^^^^

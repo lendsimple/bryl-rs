@@ -1,0 +1,5 @@
+error: `bryl::Const` fields need `constant = ...` or `reserved`
+ --> tests/ui/const_type_needs_constant.rs:6:8
+  |
+6 |     a: Const,
+  |        ^^^^^

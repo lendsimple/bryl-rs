@@ -1,0 +1,17 @@
+error: codes cannot start or end with a space (padding is stripped on decode)
+ --> tests/ui/code_invalid.rs:5:12
+  |
+5 |     #[code(" A")]
+  |            ^^^^
+
+error: codes cannot be empty
+ --> tests/ui/code_invalid.rs:7:12
+  |
+7 |     #[code("")]
+  |            ^^
+
+error: expected a string or integer code
+ --> tests/ui/code_invalid.rs:9:12
+  |
+9 |     #[code(1.5)]
+  |            ^^^

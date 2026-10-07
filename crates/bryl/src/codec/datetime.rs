@@ -4,8 +4,8 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
 use super::{FieldValue, kind_mismatch, show};
 use crate::field::{FieldKind, FieldSpec};
-use crate::pattern::Token;
 use crate::{FieldErrorKind, Sanitize};
+use bryl_pattern::Token;
 
 impl FieldValue for NaiveDate {
     fn encode(

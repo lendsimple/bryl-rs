@@ -1,3 +1,8 @@
+//! Date/time patterns for `bryl` fields, such as `MMDDYYYY`, `YYMMDD` and `hhmm`.
+//!
+//! Shared by `bryl` (at runtime) and `bryl-derive` (to reject bad patterns at
+//! compile time). Use it through `bryl`, which re-exports everything here.
+
 use thiserror::Error;
 
 /// One element of a date/time pattern such as `MMDDYYYY` or `hhmm`.
@@ -62,6 +67,26 @@ impl Token {
     }
 }
 
+/// Writes the token as it is spelled in a pattern, e.g. `YYYY` or `hh`.
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let spelling = match self {
+            Self::Year4 => "YYYY",
+            Self::Year2 => "YY",
+            Self::Month => "MM",
+            Self::Day => "DD",
+            Self::DayOfYear => "DDD",
+            Self::Hour24 => "hh",
+            Self::Hour12 => "HH",
+            Self::Minute => "mm",
+            Self::Second => "ss",
+            Self::AmPm => "pp",
+            Self::Literal(byte) => return write!(f, "{}", char::from(*byte)),
+        };
+        f.write_str(spelling)
+    }
+}
+
 /// Total rendered width of a pattern.
 pub const fn pattern_width(pattern: &[Token]) -> usize {
     let mut total = 0;
@@ -84,12 +109,25 @@ pub enum PatternKind {
     DateTime,
 }
 
+/// Writes `date`, `time` or `datetime`.
+impl std::fmt::Display for PatternKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Date => "date",
+            Self::Time => "time",
+            Self::DateTime => "datetime",
+        })
+    }
+}
+
 /// A date/time pattern that could not be parsed.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum PatternError {
     /// Letters that do not form a known token.
-    #[error("unknown token at {index} in pattern {pattern:?}")]
+    #[error(
+        "unknown token at index {index} of pattern {pattern:?}; expected YYYY, YY, MM, DD, DDD, JJJ, hh, HH, mm, ss, pp or punctuation"
+    )]
     UnknownToken {
         /// The pattern.
         pattern: String,
@@ -97,7 +135,7 @@ pub enum PatternError {
         index: usize,
     },
     /// A token that is not allowed for the pattern kind.
-    #[error("{token:?} is not allowed in a {kind:?} pattern")]
+    #[error("`{token}` is not allowed in a {kind} pattern")]
     WrongKind {
         /// The offending token.
         token: Token,

@@ -1,0 +1,5 @@
+error: unknown field attribute; expected one of `alpha(N)`, `numeric(N)`, `date("...")`, `time("...")`, `datetime("...")`, `flatten`, `pad`, `align`, `min`, `max`, `constant`, `reserved`, `sanitize(...)`, `no_sanitize`
+ --> tests/ui/unknown_attribute.rs:5:22
+  |
+5 |     #[bryl(alpha(2), colour = "red")]
+  |                      ^^^^^^

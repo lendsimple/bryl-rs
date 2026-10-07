@@ -1,0 +1,11 @@
+error: a field cannot be both `constant` and `reserved`
+ --> tests/ui/constant_and_reserved.rs:5:39
+  |
+5 |     #[bryl(alpha(2), constant = "AB", reserved)]
+  |                                       ^^^^^^^^
+
+error: constant declared here
+ --> tests/ui/constant_and_reserved.rs:5:33
+  |
+5 |     #[bryl(alpha(2), constant = "AB", reserved)]
+  |                                 ^^^^

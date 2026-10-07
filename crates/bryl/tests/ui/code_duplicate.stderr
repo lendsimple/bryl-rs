@@ -1,0 +1,5 @@
+error: code "A" is already used by `A`
+ --> tests/ui/code_duplicate.rs:7:12
+  |
+7 |     #[code("A")]
+  |            ^^^

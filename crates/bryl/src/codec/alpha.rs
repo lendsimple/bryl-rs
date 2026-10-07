@@ -14,19 +14,26 @@ impl FieldValue for String {
             return Err(kind_mismatch::<Self>(spec));
         }
         let value = sanitize.apply(self, spec.length);
-        encode_text(spec, &value, out)
+        encode_alpha(spec, &value, out)
     }
 
     fn decode(spec: &FieldSpec, raw: &[u8]) -> Result<Self, FieldErrorKind> {
         if spec.kind != FieldKind::Alpha {
             return Err(kind_mismatch::<Self>(spec));
         }
-        decode_text(spec, raw)
+        decode_alpha(spec, raw)
     }
 }
 
-/// Validates and pads text that is already sanitized.
-pub(super) fn encode_text(
+/// Writes `value` into an alphanumeric field without sanitizing: checks the
+/// length and that it is printable ASCII, then pads.
+///
+/// Used by `#[derive(Code)]` and custom [`FieldValue`] implementations.
+///
+/// # Errors
+///
+/// Returns [`FieldErrorKind::TooLong`] or [`FieldErrorKind::InvalidChar`].
+pub fn encode_alpha(
     spec: &FieldSpec,
     value: &str,
     out: &mut Vec<u8>,
@@ -45,8 +52,13 @@ pub(super) fn encode_text(
     Ok(())
 }
 
-/// Strips padding and checks the remaining text is printable ASCII.
-pub(super) fn decode_text(spec: &FieldSpec, raw: &[u8]) -> Result<String, FieldErrorKind> {
+/// Reads an alphanumeric field: checks it is printable ASCII and strips the
+/// padding.
+///
+/// # Errors
+///
+/// Returns [`FieldErrorKind::InvalidChar`].
+pub fn decode_alpha(spec: &FieldSpec, raw: &[u8]) -> Result<String, FieldErrorKind> {
     if let Some((index, &b)) = raw
         .iter()
         .enumerate()

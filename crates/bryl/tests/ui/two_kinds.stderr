@@ -1,0 +1,5 @@
+error: a field can have only one kind
+ --> tests/ui/two_kinds.rs:5:22
+  |
+5 |     #[bryl(alpha(2), numeric(2))]
+  |                      ^^^^^^^

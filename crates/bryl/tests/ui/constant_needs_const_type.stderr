@@ -1,0 +1,5 @@
+error: constant and reserved fields must have type `bryl::Const`
+ --> tests/ui/constant_needs_const_type.rs:6:8
+  |
+6 |     a: String,
+  |        ^^^^^^

@@ -1,5 +1,5 @@
-use super::alpha::{decode_text, encode_text};
-use super::numeric::{decode_number, encode_number};
+use super::alpha::{decode_alpha, encode_alpha};
+use super::numeric::{decode_numeric, encode_numeric};
 use super::{FieldValue, kind_mismatch};
 use crate::field::{Const, Constant, FieldKind, FieldSpec};
 use crate::{FieldErrorKind, Sanitize};
@@ -19,7 +19,7 @@ impl FieldValue for Const {
         let constant = spec.constant.ok_or(FieldErrorKind::MissingConstant)?;
         match (constant, spec.kind) {
             (Constant::Str(expected), FieldKind::Alpha) => {
-                let found = decode_text(spec, raw)?;
+                let found = decode_alpha(spec, raw)?;
                 if found != expected {
                     return Err(FieldErrorKind::ConstantMismatch {
                         expected: expected.to_owned(),
@@ -28,7 +28,7 @@ impl FieldValue for Const {
                 }
             }
             (Constant::Num(expected), FieldKind::Numeric { .. }) => {
-                let found = decode_number(spec, raw)?;
+                let found = decode_numeric(spec, raw)?;
                 if found != expected {
                     return Err(FieldErrorKind::ConstantMismatch {
                         expected: expected.to_string(),
@@ -49,8 +49,8 @@ pub(crate) fn encode_constant(
     out: &mut Vec<u8>,
 ) -> Result<(), FieldErrorKind> {
     match (constant, spec.kind) {
-        (Constant::Str(value), FieldKind::Alpha) => encode_text(spec, value, out),
-        (Constant::Num(value), FieldKind::Numeric { .. }) => encode_number(spec, value, out),
+        (Constant::Str(value), FieldKind::Alpha) => encode_alpha(spec, value, out),
+        (Constant::Num(value), FieldKind::Numeric { .. }) => encode_numeric(spec, value, out),
         _ => Err(kind_mismatch::<Const>(spec)),
     }
 }

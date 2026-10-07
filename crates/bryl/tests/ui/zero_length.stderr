@@ -1,0 +1,5 @@
+error: field length must be at least 1
+ --> tests/ui/zero_length.rs:5:18
+  |
+5 |     #[bryl(alpha(0))]
+  |                  ^

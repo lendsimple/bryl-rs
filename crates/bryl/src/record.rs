@@ -15,6 +15,10 @@ pub struct EncodeCx {
 ///
 /// [`codec::encode_field`]: crate::codec::encode_field
 /// [`codec::decode_field`]: crate::codec::decode_field
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a bryl record",
+    label = "only records can be flattened; add `#[derive(bryl::Record)]` to `{Self}`"
+)]
 pub trait Record: Sized {
     /// Record type name, used in error messages.
     const NAME: &'static str;
@@ -72,6 +76,11 @@ pub trait Record: Sized {
             });
         }
         Self::decode_fields(raw)
+    }
+
+    /// Looks up a field's layout by name.
+    fn field(name: &str) -> Option<&'static FieldSpec> {
+        Self::FIELDS.iter().find(|spec| spec.name == name)
     }
 
     /// Decodes a record if `raw` holds a valid one.
