@@ -1,2 +1,10 @@
 /target
 **/*.rs.bk
+
+# macOS
+.DS_Store
+
+# Coverage (cargo llvm-cov, grcov)
+*.profraw
+*.profdata
+lcov.info
