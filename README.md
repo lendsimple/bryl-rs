@@ -2,14 +2,11 @@
 
 [![CI](https://github.com/lendsimple/bryl-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lendsimple/bryl-rs/actions/workflows/ci.yml)
 
-Fixed-width record files in Rust: a small declarative core, and NACHA (ACH)
-and Metro 2 (credit reporting) built on it. Each format crate's
-documentation lists the sources for its rules and what it does not
-support.
-
-The core is a Rust take on [bryl](https://github.com/balanced/bryl), Balanced's
-library for declaratively defining, constructing and serializing fixed-width
-records made of typed fields.
+bryl is a Rust library for formatting fixed-width records: declare a
+record's typed fields once, then construct, write and read it. Format crates
+built on it support NACHA (ACH) and Metro 2 (credit reporting) files. Each
+format crate's documentation lists the sources for its rules and what it
+does not support.
 
 | Crate | Import as | What it is |
 |-------|-----------|------------|
@@ -81,6 +78,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
   ```
 - The Metro 2 reference files in `crates/bryl-metro2/tests/fixtures/moov`
   come from [moov-io/metro2](https://github.com/moov-io/metro2) (Apache-2.0).
+
+## Background
+
+The name and approach come from [bryl](https://github.com/balanced/bryl), a
+defunct Python library for NACHA files.
 
 ## License
 
