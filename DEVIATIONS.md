@@ -25,8 +25,10 @@ inventory in `implementation.md`.
 
 ## nacha
 
-Sources for the ⚠ items: [NACHA ACH developer guide](https://achdevguide.nacha.org/ach-file-details),
-[moov-io/ach](https://github.com/moov-io/ach) (`fileHeader.go`, `batch*.go`).
+Sources: [NACHA ACH developer guide](https://achdevguide.nacha.org/ach-file-details),
+[moov-io/ach](https://github.com/moov-io/ach) (`fileHeader.go`, `batch*.go`), and
+the published NACHA file specifications of Chase, Regions, First Citizens and
+Banc of California. These sources also confirm N1, N2, N3, N5, N6 and N14.
 
 Output differences are verified byte for byte by
 `crates/bryl-nacha/tests/golden.rs`, which applies each one (N1, N2, N3,
@@ -41,12 +43,17 @@ N14) to files written by `nacha.py`.
 | N5 | A batch's service class code is not checked against its entries. | `220` (credits only) rejects debits; `225` (debits only) rejects credits. | Such entries are rejected instead of written. |
 | N6 | Routing numbers are only checked for length; prenote amounts are not checked. | Routing numbers (receiving DFI and immediate destination) must pass the ABA 3-7-1 checksum; prenotes must have a zero amount. | Such values are rejected on write and on read. |
 | N7 | `immediate_origin` is left-aligned, so a 9-digit origin is written `123456789 `. | Right-aligned and space-padded, like `immediate_destination`: ` 123456789`. NACHA's developer guide: "the nine-digit routing transit number … preceded by a blank"; moov-io/ach does the same. A 10-character value (e.g. `1` + tax ID) is written unchanged; some banks ask for that. | Differs only for origins shorter than 10 characters. |
-| N8 | Any number of addenda per entry. | Type-05 addenda per SEC code, following moov-io/ach's batch validators: none for ARC, POP, RCK, TRC, XCK, TEL, ADV; none for COR (needs type 98) and MTE, POS, SHR (need type 02), which this library cannot write; exactly one for DNE and ENR; up to 9,999 for CTX, ATX, TRX; at most one otherwise. ⚠ moov-io's behavior, not the NACHA Operating Rules text. | Entries outside the limits are rejected. |
+| N8 | Any number of addenda per entry. | Type-05 addenda per SEC code. At most one for PPD, CCD and WEB, none for TEL, up to 9,999 for CTX: NACHA's developer guide and bank specifications (First Citizens). From moov-io/ach only: none for ARC, BOC, POP, RCK, TRC, XCK and ADV; none for COR (needs type 98) and MTE, POS, SHR (need type 02), which this library cannot write; exactly one for DNE and ENR (ENR is the weakest: a moov-io comment); up to 9,999 for ATX and TRX; at most one for CIE, ACK, PBR, CBR. | Entries outside the limits are rejected. |
 | N9 | `created_at` defaults to `utcnow()`. | Required; `FileParams::now()` is a convenience. | None (API only). |
 | N12 | Lines may be longer than 94 characters; filler lines are not recognized. | Lines must be exactly 94 characters; `9…9` filler lines are recognized and skipped. | Malformed lines are rejected on read. |
 | N13 | `EntryDetail.mask()` changes the record in place. | `mask()` returns a masked copy. | None (API only). |
 | N14 | `receiving_dfi_account_number` is right-aligned. | Left-aligned and space-padded, as the spec requires for alphanumeric fields. | Account number columns 13–29 differ for numbers shorter than 17 characters. Reading a Python-written file keeps the leading spaces (`"        123456789"`); trim them when comparing. |
 | N15 | The file ID modifier is any one character. | Must be `A`–`Z` or `0`–`9`. | Other values are rejected. |
+| N16 | `StandardEntryClasses` has no BOC (back office conversion). | `StandardEntryClass::Boc` exists, with no addenda. | BOC batches can be written and read. |
+| N17 | Any transaction code in any SEC batch. | TEL and the check conversion classes (ARC, BOC, POP, RCK, TRC) are debit-only and CIE is credit-only, except in reversal batches (company entry description `REVERSAL`). From NACHA's developer guide and moov-io/ach; WEB is not restricted (person-to-person WEB credits exist). | Such entries are rejected on write and reported by `File::validate`. |
+| N18 | Any company entry description. | ENR batches must be described `AUTOENROLL` and RCK batches `REDEPCHECK` (moov-io/ach). | Such batches are rejected on write (`Error::InvalidBatch`) and reported by `File::validate`. |
+| N19 | Batch numbers are not checked when reading. | `File::validate` reports batch numbers that do not ascend (NACHA's developer guide). The writer always numbers batches 1, 2, 3, … | None (reading only). |
+| N20 | Lines end with `\n`. | Still `\n` by default; `Writer::line_ending(LineEnding::CrLf)` writes `\r\n`, which some banks require (First Citizens, Banc of California). NACHA does not specify line endings. Reading accepts both. | None by default. |
 
 `File::validate` (new) reports N1, N2 and N3 as issues when reading files
 written by `nacha.py`; see `crates/bryl-nacha/tests/reader.rs`.

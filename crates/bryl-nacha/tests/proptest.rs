@@ -27,12 +27,15 @@ fn text(max: usize) -> impl Strategy<Value = String> {
 
 fn entry(
     service_class: ServiceClassCode,
+    sec: StandardEntryClass,
     max_addenda: usize,
 ) -> impl Strategy<Value = EntryParams> {
     let codes: Vec<_> = TransactionCode::ALL
         .iter()
         .copied()
-        .filter(|code| service_class.allows(*code))
+        .filter(|&code| service_class.allows(code))
+        .filter(|&code| !(sec.debits_only() && code.is_credit()))
+        .filter(|&code| !(sec.credits_only() && code.is_debit()))
         .collect();
     (
         proptest::sample::select(codes),
@@ -56,28 +59,48 @@ fn entry(
         })
 }
 
-fn batch() -> impl Strategy<Value = BatchSpec> {
+/// Entry classes paired with the service classes they can use: TEL is
+/// debit-only and CIE credit-only.
+const CLASSES: [(StandardEntryClass, ServiceClassCode); 10] = [
     (
-        proptest::sample::select(ServiceClassCode::ALL),
-        proptest::sample::select(
-            &[
-                StandardEntryClass::Ppd,
-                StandardEntryClass::Ccd,
-                StandardEntryClass::Ctx,
-                StandardEntryClass::Tel,
-            ][..],
-        ),
-    )
-        .prop_flat_map(|(service_class_code, standard_entry_class)| {
+        StandardEntryClass::Ppd,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
+    (StandardEntryClass::Ppd, ServiceClassCode::CreditsOnly),
+    (StandardEntryClass::Ppd, ServiceClassCode::DebitsOnly),
+    (
+        StandardEntryClass::Ccd,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
+    (
+        StandardEntryClass::Ctx,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
+    (StandardEntryClass::Ctx, ServiceClassCode::CreditsOnly),
+    (
+        StandardEntryClass::Tel,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
+    (StandardEntryClass::Tel, ServiceClassCode::DebitsOnly),
+    (StandardEntryClass::Cie, ServiceClassCode::CreditsOnly),
+    (
+        StandardEntryClass::Web,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
+];
+
+fn batch() -> impl Strategy<Value = BatchSpec> {
+    proptest::sample::select(&CLASSES[..]).prop_flat_map(
+        |(standard_entry_class, service_class_code)| {
             let max = usize::from(standard_entry_class.max_addenda()).min(3);
-            proptest::collection::vec(entry(service_class_code, max), 0..8).prop_map(
-                move |entries| BatchSpec {
+            proptest::collection::vec(entry(service_class_code, standard_entry_class, max), 0..8)
+                .prop_map(move |entries| BatchSpec {
                     service_class_code,
                     standard_entry_class,
                     entries,
-                },
-            )
-        })
+                })
+        },
+    )
 }
 
 fn write(batches: &[BatchSpec]) -> (String, Vec<Vec<nacha::Entry>>) {

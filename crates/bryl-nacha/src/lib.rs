@@ -33,7 +33,7 @@ mod types;
 mod validate;
 mod writer;
 
-pub use codes::{AccountKind, ServiceClassCode, StandardEntryClass, TransactionCode};
+pub use codes::{AccountKind, REVERSAL, ServiceClassCode, StandardEntryClass, TransactionCode};
 pub use entry::Entry;
 pub use error::Error;
 pub use file::{Batch, File};
@@ -45,4 +45,6 @@ pub use records::{
 pub use totals::{HASH_MODULUS, Totals};
 pub use types::{FileIdModifier, FileIdModifierError, RoutingNumber, RoutingNumberError};
 pub use validate::{Issue, IssueKind};
-pub use writer::{BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, Writer};
+pub use writer::{
+    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, Writer,
+};

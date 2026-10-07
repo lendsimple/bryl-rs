@@ -367,6 +367,29 @@ mod blocks {
     }
 
     #[test]
+    fn crlf_line_endings() {
+        let mut writer = Writer::new(Vec::new()).line_ending(nacha::LineEnding::CrLf);
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::CreditsOnly))
+            .unwrap();
+        batch
+            .entry(entry_params(
+                TransactionCode::CheckingCredit,
+                100,
+                &["MEMO"],
+            ))
+            .unwrap();
+        batch.finish().unwrap();
+        file.finish().unwrap();
+        let output = String::from_utf8(writer.into_inner()).unwrap();
+        assert_eq!(output.matches("\r\n").count(), 10);
+        assert_eq!(output.matches('\n').count(), 10);
+        assert!(output.ends_with("\r\n"));
+        assert_eq!(File::read(output.as_bytes()).unwrap().validate(), []);
+    }
+
+    #[test]
     fn padding_can_be_disabled() {
         let mut writer = Writer::new(Vec::new()).pad_blocks(false);
         let file = writer.begin_file(file_params()).unwrap();
@@ -477,7 +500,7 @@ mod rules {
         let kind = rejected(
             ServiceClassCode::MixedDebitsAndCredits,
             StandardEntryClass::Tel,
-            entry_params(TransactionCode::CheckingCredit, 100, &["A"]),
+            entry_params(TransactionCode::CheckingDebit, 100, &["A"]),
         );
         assert!(matches!(kind, IssueKind::TooManyAddenda { max: 0, .. }));
     }
@@ -497,6 +520,85 @@ mod rules {
                 count: 0
             }
         );
+    }
+
+    #[test]
+    fn tel_is_debit_only() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Tel,
+            entry_params(TransactionCode::CheckingCredit, 100, &[]),
+        );
+        assert_eq!(
+            kind,
+            IssueKind::EntryClassDirection {
+                standard_entry_class: StandardEntryClass::Tel,
+                transaction_code: TransactionCode::CheckingCredit
+            }
+        );
+    }
+
+    #[test]
+    fn cie_is_credit_only() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Cie,
+            entry_params(TransactionCode::SavingsDebit, 100, &[]),
+        );
+        assert!(matches!(kind, IssueKind::EntryClassDirection { .. }));
+    }
+
+    #[test]
+    fn reversal_batches_may_credit_debit_only_classes() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(BatchParams {
+                standard_entry_class: StandardEntryClass::Tel,
+                company_entry_description: nacha::REVERSAL.into(),
+                ..batch_params(ServiceClassCode::MixedDebitsAndCredits)
+            })
+            .unwrap();
+        batch
+            .entry(entry_params(TransactionCode::CheckingCredit, 100, &[]))
+            .unwrap();
+        batch.finish().unwrap();
+        file.finish().unwrap();
+        let file = File::read(writer.get_ref().as_slice()).unwrap();
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn required_entry_descriptions() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let err = file
+            .begin_batch(BatchParams {
+                standard_entry_class: StandardEntryClass::Enr,
+                ..batch_params(ServiceClassCode::MixedDebitsAndCredits)
+            })
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::InvalidBatch(IssueKind::EntryDescription {
+                expected: "AUTOENROLL",
+                ..
+            })
+        ));
+        // Nothing was written for the rejected batch, and its number is unused.
+        let batch = file
+            .begin_batch(BatchParams {
+                standard_entry_class: StandardEntryClass::Rck,
+                company_entry_description: "redepcheck".into(),
+                ..batch_params(ServiceClassCode::DebitsOnly)
+            })
+            .unwrap();
+        assert_eq!(batch.header().batch_number, 1);
+        batch.finish().unwrap();
+        file.finish().unwrap();
+        let output = String::from_utf8(writer.into_inner()).unwrap();
+        assert!(output.contains("REDEPCHECK"));
+        assert_eq!(record_lines(&output).len(), 4);
     }
 
     #[test]

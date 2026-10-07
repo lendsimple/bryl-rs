@@ -14,9 +14,8 @@ use crate::records::{
 };
 use crate::totals::Totals;
 use crate::types::{FileIdModifier, RoutingNumber};
-use crate::validate::entry_issues;
+use crate::validate::{batch_issues, entry_issues};
 
-const LINE_TERMINATOR: u8 = b'\n';
 const MAX_SEQUENCE: u32 = 9_999_999;
 
 /// Writes NACHA files to `W`.
@@ -102,7 +101,29 @@ const MAX_SEQUENCE: u32 = 9_999_999;
 pub struct Writer<W> {
     out: W,
     pad_blocks: bool,
+    line_ending: LineEnding,
     sanitize: Option<Sanitize>,
+}
+
+/// How each record line ends. NACHA does not specify it; some banks require
+/// CRLF.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum LineEnding {
+    /// `\n` (the default).
+    #[default]
+    Lf,
+    /// `\r\n`.
+    CrLf,
+}
+
+impl LineEnding {
+    /// The bytes that end a line.
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::Lf => b"\n",
+            Self::CrLf => b"\r\n",
+        }
+    }
 }
 
 /// File header values. The file ID modifier defaults to `A`.
@@ -193,8 +214,16 @@ impl<W: Write> Writer<W> {
         Self {
             out,
             pad_blocks: true,
+            line_ending: LineEnding::Lf,
             sanitize: None,
         }
+    }
+
+    /// How record lines end (`\n` by default).
+    #[must_use]
+    pub fn line_ending(mut self, line_ending: LineEnding) -> Self {
+        self.line_ending = line_ending;
+        self
     }
 
     /// Whether to pad files with filler lines to a multiple of 10 records
@@ -285,7 +314,9 @@ impl<'w, W: Write> FileWriter<'w, W> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the header cannot be encoded or written.
+    /// Returns [`Error::InvalidBatch`] if the header breaks a NACHA rule (e.g.
+    /// an ENR batch not described as `AUTOENROLL`), or an encoding or I/O
+    /// error.
     pub fn begin_batch(&mut self, params: BatchParams) -> Result<BatchWriter<'_, 'w, W>, Error> {
         let batch_number = self.batches_started + 1;
         if batch_number > MAX_SEQUENCE {
@@ -307,6 +338,9 @@ impl<'w, W: Write> FileWriter<'w, W> {
             .originating_dfi_id(params.originating_dfi_id)
             .batch_number(batch_number)
             .build();
+        if let Some(issue) = batch_issues(&header).into_iter().next() {
+            return Err(Error::InvalidBatch(issue));
+        }
         let mut buf = Vec::new();
         self.encode(&header, &mut buf)?;
         self.emit(&buf, 1)?;
@@ -338,7 +372,7 @@ impl<'w, W: Write> FileWriter<'w, W> {
         if self.writer.pad_blocks {
             for _ in 0..(10 - lines % 10) % 10 {
                 buf.extend_from_slice(&FILLER);
-                buf.push(LINE_TERMINATOR);
+                buf.extend_from_slice(self.writer.line_ending.as_bytes());
             }
         }
         self.emit(&buf, 1)?;
@@ -351,7 +385,7 @@ impl<'w, W: Write> FileWriter<'w, W> {
             sanitize: self.writer.sanitize,
         };
         record.encode_into(&cx, buf)?;
-        buf.push(LINE_TERMINATOR);
+        buf.extend_from_slice(self.writer.line_ending.as_bytes());
         Ok(())
     }
 
@@ -380,9 +414,10 @@ impl<W: Write> BatchWriter<'_, '_, W> {
 
     /// Writes an entry and its addenda, and returns them.
     ///
-    /// The entry is checked against the batch (service class, prenote amount,
-    /// addenda limit for the SEC code) and fully encoded before anything is
-    /// written, so a rejected entry leaves the output unchanged.
+    /// The entry is checked against the batch (service class, debit/credit
+    /// rules of the SEC code, prenote amount, addenda limits) and fully
+    /// encoded before anything is written, so a rejected entry leaves the
+    /// output unchanged.
     ///
     /// # Errors
     ///

@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1eff6deeded006ed37f626a5b87a49dc9cdd1aa33a2fb056b0d1f024f8f30ff5 # shrinks to batches = [BatchSpec { service_class_code: MixedDebitsAndCredits, standard_entry_class: Tel, entries: [EntryParams { transaction_code: SavingsReturnedCredit, receiving_dfi: RoutingNumber(91000019), account_number: "0", amount: 0, individual_id: "AA", individual_name: "00", trace_number: None, discretionary_data: "", addenda: [] }] }]
+cc 31b6430ccadfed770c38730a7989902042cb45d94c318642a2a58fb789fb7842 # shrinks to batches = [BatchSpec { service_class_code: MixedDebitsAndCredits, standard_entry_class: Tel, entries: [EntryParams { transaction_code: CheckingReturnedCredit, receiving_dfi: RoutingNumber(91000019), account_number: "0", amount: 0, individual_id: "AA", individual_name: "0A", trace_number: None, discretionary_data: "", addenda: [] }] }], position = Index(744380550), byte = 183

@@ -12,6 +12,9 @@ pub enum Error {
     /// A record could not be encoded.
     #[error(transparent)]
     Record(#[from] bryl::Error),
+    /// A batch header breaks a NACHA rule; nothing was written for it.
+    #[error("invalid batch: {0}")]
+    InvalidBatch(IssueKind),
     /// An entry breaks a NACHA rule; nothing was written for it.
     #[error("invalid entry: {0}")]
     InvalidEntry(IssueKind),

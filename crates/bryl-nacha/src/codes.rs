@@ -33,6 +33,9 @@ pub enum StandardEntryClass {
     /// Accounts receivable entry.
     #[code("ARC")]
     Arc,
+    /// Back office conversion entry.
+    #[code("BOC")]
+    Boc,
     /// Customer initiated entry.
     #[code("CIE")]
     Cie,
@@ -104,18 +107,19 @@ pub enum StandardEntryClass {
 impl StandardEntryClass {
     /// Most type-05 addenda records an entry of this class may carry.
     ///
-    /// - None for check conversion (ARC, POP, RCK, TRC, XCK) and TEL.
+    /// - At most one for PPD, CCD and WEB, none for TEL, and up to 9,999 for
+    ///   CTX (NACHA's developer guide and bank specifications).
+    /// - None for the other check conversion classes (ARC, BOC, POP, RCK,
+    ///   TRC, XCK), and up to 9,999 for ATX and TRX (moov-io/ach).
     /// - None for ADV, which has no addenda, and for COR (type 98) and MTE,
     ///   POS and SHR (type 02): this library only writes type-05 addenda, so
     ///   entries of these classes cannot carry their required addenda.
-    /// - Up to 9,999 for CTX, ATX and TRX.
-    /// - One for everything else.
-    ///
-    /// This follows moov-io/ach's batch validators; PBR and CBR (replaced by
-    /// IAT) are not checked by moov-io and are allowed one.
+    /// - One for everything else (CIE, ACK, DNE, ENR; PBR and CBR, replaced by
+    ///   IAT, are not checked by moov-io).
     pub const fn max_addenda(self) -> u16 {
         match self {
             Self::Arc
+            | Self::Boc
             | Self::Pop
             | Self::Rck
             | Self::Trc
@@ -132,14 +136,45 @@ impl StandardEntryClass {
     }
 
     /// Fewest type-05 addenda records an entry of this class must carry: one
-    /// for DNE and ENR, otherwise none.
+    /// for DNE and ENR (moov-io/ach), otherwise none.
     pub const fn min_addenda(self) -> u16 {
         match self {
             Self::Dne | Self::Enr => 1,
             _ => 0,
         }
     }
+
+    /// True for classes whose entries must be debits: telephone-initiated
+    /// (TEL) and check conversion (ARC, BOC, POP, RCK, TRC) entries debit the
+    /// consumer. Credits are allowed only in a reversal batch (company entry
+    /// description `REVERSAL`). Follows moov-io/ach and NACHA's developer
+    /// guide.
+    pub const fn debits_only(self) -> bool {
+        matches!(
+            self,
+            Self::Tel | Self::Arc | Self::Boc | Self::Pop | Self::Rck | Self::Trc
+        )
+    }
+
+    /// True for classes whose entries must be credits: customer-initiated
+    /// entries (CIE) move money to the biller (moov-io/ach).
+    pub const fn credits_only(self) -> bool {
+        matches!(self, Self::Cie)
+    }
+
+    /// The company entry description batches of this class must use:
+    /// `AUTOENROLL` for ENR and `REDEPCHECK` for RCK (moov-io/ach).
+    pub const fn required_entry_description(self) -> Option<&'static str> {
+        match self {
+            Self::Enr => Some("AUTOENROLL"),
+            Self::Rck => Some("REDEPCHECK"),
+            _ => None,
+        }
+    }
 }
+
+/// Company entry description that marks a reversal batch.
+pub const REVERSAL: &str = "REVERSAL";
 
 /// Entry detail transaction code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]

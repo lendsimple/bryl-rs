@@ -9,7 +9,7 @@ use crate::entry::Entry;
 use crate::reader::Reader;
 use crate::records::{BatchControl, BatchHeader, FileControl, FileHeader};
 use crate::totals::Totals;
-use crate::validate::{Issue, IssueKind, entry_issues};
+use crate::validate::{Issue, IssueKind, batch_issues, entry_issues};
 
 /// A parsed NACHA file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,13 +63,24 @@ impl File {
             .sum::<usize>()
     }
 
-    /// Checks control totals, counts, batch header/control agreement, entry
-    /// rules, trace numbers and block padding. Returns every problem found.
+    /// Checks control totals, counts, batch header/control agreement, batch
+    /// and entry rules, batch number and trace number order, and block
+    /// padding. Returns every problem found.
     pub fn validate(&self) -> Vec<Issue> {
         let mut issues = Vec::new();
         let mut file_totals = Totals::default();
         let mut traces = HashSet::new();
+        let mut previous_batch_number = None;
         for batch in &self.batches {
+            let number = batch.header.batch_number;
+            if let Some(previous) = previous_batch_number.filter(|&previous| number <= previous) {
+                issues.push(Issue {
+                    batch_number: Some(number),
+                    trace_number: None,
+                    kind: IssueKind::BatchNumberOrder { previous },
+                });
+            }
+            previous_batch_number = Some(number);
             let batch_totals = batch.validate(&mut traces, &mut issues);
             file_totals.add(&batch_totals);
         }
@@ -121,6 +132,11 @@ impl Batch {
     /// Adds this batch's issues and returns its computed totals.
     fn validate(&self, traces: &mut HashSet<u64>, issues: &mut Vec<Issue>) -> Totals {
         let batch_number = Some(self.header.batch_number);
+        issues.extend(batch_issues(&self.header).into_iter().map(|kind| Issue {
+            batch_number,
+            trace_number: None,
+            kind,
+        }));
         let mut totals = Totals::default();
         let mut previous_trace = None;
         for entry in &self.entries {

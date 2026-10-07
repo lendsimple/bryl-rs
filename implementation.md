@@ -559,3 +559,4 @@ Upstart's `metro_2` gem and vendor documentation):
 - **Character rules** (M17): `DataRecord::validate` checks names, addresses and account/identification numbers (base, J1, J2, L1).
 - **Status 05** is rejected on write (M18), retired by CDIA in April 2022.
 - The Metro 2 golden scenarios now use letters-and-digits account numbers, and the golden test applies the block-count deviation.
+- **NACHA follow-up** (NACHA's developer guide, four banks' published specs, moov-io/ach): N8 limits for PPD/CCD/WEB/TEL/CTX confirmed and its ⚠ removed; BOC added (N16); SEC debit/credit rules with a reversal exemption (N17); required `AUTOENROLL`/`REDEPCHECK` descriptions (N18); ascending batch numbers checked on read (N19); `Writer::line_ending` for CRLF (N20). N1, N2, N3, N5, N6 and N14 were confirmed unchanged.

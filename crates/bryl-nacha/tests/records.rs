@@ -294,7 +294,7 @@ mod codes {
     #[test]
     fn code_table_sizes() {
         assert_eq!(ServiceClassCode::ALL.len(), 3);
-        assert_eq!(StandardEntryClass::ALL.len(), 23);
+        assert_eq!(StandardEntryClass::ALL.len(), 24);
         assert_eq!(TransactionCode::ALL.len(), 12);
     }
 
@@ -446,6 +446,30 @@ mod codes {
     }
 
     #[test]
+    fn direction_and_description_rules() {
+        use StandardEntryClass as Sec;
+        let debits_only: Vec<_> = Sec::ALL
+            .iter()
+            .filter(|c| c.debits_only())
+            .copied()
+            .collect();
+        assert_eq!(
+            debits_only,
+            [Sec::Arc, Sec::Boc, Sec::Pop, Sec::Rck, Sec::Tel, Sec::Trc]
+        );
+        let credits_only: Vec<_> = Sec::ALL
+            .iter()
+            .filter(|c| c.credits_only())
+            .copied()
+            .collect();
+        assert_eq!(credits_only, [Sec::Cie]);
+        assert_eq!(Sec::Enr.required_entry_description(), Some("AUTOENROLL"));
+        assert_eq!(Sec::Rck.required_entry_description(), Some("REDEPCHECK"));
+        assert_eq!(Sec::Ppd.required_entry_description(), None);
+        assert_eq!("BOC".parse(), Ok(Sec::Boc));
+    }
+
+    #[test]
     fn addenda_limits() {
         use StandardEntryClass as Sec;
         let limits = |classes: &[Sec]| -> Vec<(u16, u16)> {
@@ -456,6 +480,7 @@ mod codes {
         };
         let none = [
             Sec::Arc,
+            Sec::Boc,
             Sec::Pop,
             Sec::Rck,
             Sec::Trc,

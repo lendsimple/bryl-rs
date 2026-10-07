@@ -4,7 +4,7 @@ use std::fmt;
 
 use thiserror::Error;
 
-use crate::codes::{ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{REVERSAL, ServiceClassCode, StandardEntryClass, TransactionCode};
 use crate::entry::Entry;
 use crate::records::BatchHeader;
 
@@ -35,6 +35,34 @@ pub enum IssueKind {
         service_class_code: ServiceClassCode,
         /// Entry transaction code.
         transaction_code: TransactionCode,
+    },
+    /// The transaction's direction is not allowed by the batch's SEC code
+    /// (e.g. a credit in a TEL batch, or a debit in a CIE batch). Reversal
+    /// batches are exempt.
+    #[error("transaction code {transaction_code} is not allowed in a {standard_entry_class} batch")]
+    EntryClassDirection {
+        /// Batch SEC code.
+        standard_entry_class: StandardEntryClass,
+        /// Entry transaction code.
+        transaction_code: TransactionCode,
+    },
+    /// The batch's SEC code requires a specific company entry description.
+    #[error(
+        "{standard_entry_class} batches must use company entry description {expected}, got {found:?}"
+    )]
+    EntryDescription {
+        /// Batch SEC code.
+        standard_entry_class: StandardEntryClass,
+        /// The required description.
+        expected: &'static str,
+        /// The description in the batch header.
+        found: String,
+    },
+    /// Batch numbers are not ascending.
+    #[error("batch number is not greater than the previous batch's ({previous})")]
+    BatchNumberOrder {
+        /// The previous batch's number.
+        previous: u32,
     },
     /// A prenote has a non-zero amount.
     #[error("prenote amount must be 0, got {amount}")]
@@ -127,6 +155,26 @@ impl fmt::Display for Issue {
 
 impl std::error::Error for Issue {}
 
+/// Rules for a batch header on its own.
+pub(crate) fn batch_issues(batch: &BatchHeader) -> Vec<IssueKind> {
+    let sec = batch.standard_entry_class;
+    match sec.required_entry_description() {
+        Some(expected)
+            if !batch
+                .company_entry_description
+                .trim()
+                .eq_ignore_ascii_case(expected) =>
+        {
+            vec![IssueKind::EntryDescription {
+                standard_entry_class: sec,
+                expected,
+                found: batch.company_entry_description.clone(),
+            }]
+        }
+        _ => Vec::new(),
+    }
+}
+
 /// Rules for a single entry within its batch.
 pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind> {
     let mut issues = Vec::new();
@@ -135,6 +183,19 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
     if !batch.service_class_code.allows(code) {
         issues.push(IssueKind::ServiceClass {
             service_class_code: batch.service_class_code,
+            transaction_code: code,
+        });
+    }
+    let sec = batch.standard_entry_class;
+    let reversal = batch
+        .company_entry_description
+        .trim()
+        .eq_ignore_ascii_case(REVERSAL);
+    let wrong_direction =
+        (sec.debits_only() && code.is_credit()) || (sec.credits_only() && code.is_debit());
+    if wrong_direction && !reversal {
+        issues.push(IssueKind::EntryClassDirection {
+            standard_entry_class: sec,
             transaction_code: code,
         });
     }

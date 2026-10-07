@@ -352,6 +352,63 @@ mod validate {
     }
 
     #[test]
+    fn batch_number_order() {
+        let mut file =
+            File::read(write_sample_file(1, 100, TransactionCode::CheckingCredit, &[]).as_bytes())
+                .unwrap();
+        let mut second = file.batches[0].clone();
+        second.header.batch_number = 1;
+        second.control.batch_number = 1;
+        second.entries[0].detail.trace_number += 1;
+        file.batches.push(second);
+        file.control.batch_count = 2;
+        let issues: Vec<_> = file
+            .validate()
+            .into_iter()
+            .filter(|i| matches!(i.kind, IssueKind::BatchNumberOrder { .. }))
+            .collect();
+        assert_eq!(
+            issues,
+            [Issue {
+                batch_number: Some(1),
+                trace_number: None,
+                kind: IssueKind::BatchNumberOrder { previous: 1 }
+            }]
+        );
+    }
+
+    #[test]
+    fn batch_and_entry_class_rules() {
+        let mut file =
+            File::read(write_sample_file(1, 100, TransactionCode::CheckingCredit, &[]).as_bytes())
+                .unwrap();
+        file.batches[0].header.standard_entry_class = nacha::StandardEntryClass::Enr;
+        assert_eq!(
+            kinds(&file),
+            [
+                IssueKind::EntryDescription {
+                    standard_entry_class: nacha::StandardEntryClass::Enr,
+                    expected: "AUTOENROLL",
+                    found: "PAYROLL".into()
+                },
+                IssueKind::TooFewAddenda {
+                    standard_entry_class: nacha::StandardEntryClass::Enr,
+                    min: 1,
+                    count: 0
+                }
+            ]
+        );
+        file.batches[0].header.standard_entry_class = nacha::StandardEntryClass::Tel;
+        assert_eq!(
+            kinds(&file),
+            [IssueKind::EntryClassDirection {
+                standard_entry_class: nacha::StandardEntryClass::Tel,
+                transaction_code: TransactionCode::CheckingCredit
+            }]
+        );
+    }
+
+    #[test]
     fn block_padding() {
         let mut file = file();
         file.filler_count = 3;
