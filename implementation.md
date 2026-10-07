@@ -58,7 +58,7 @@ These are the subtleties found while reading the code and tests. Each one is eit
 | M5 | Segment output order: J1*, J2*, K1, K2, K3, K4, L1, N1. On load, an unknown 2-character segment id stops segment parsing (it is treated as padding). | **Kept**. |
 | M6 | Trailer accumulation: status counters; SSN (`0 < ssn < 999999999`), DOB, phone (`> 0`) and ECOA `Z` counts across base/J1/J2; K/L/N counts; `block_count = total_base_records + 2`; the "all segments" totals are summed at the end. | **Kept**. `block_count` matches moov-io's test data (`block_count=3` for 1 base record). ⚠ Verify against the CRRG. |
 | M7 | The validation helpers (`validate_payment_rating`, `validate_amount_past_due`, `validate_payment_history`) exist but the **writer never calls them**. | **Changed**: `BaseSegment::validate()` runs the cross-field rules, and the writer calls it by default (`Writer::validate(false)` turns that off). |
-| M8 | `PAYMENT_RATING_FOR_STATUS` maps status 11→`0`, 71→`1`, and so on. | ⚠ **Verify against the CRRG** before encoding the rule. The CRRG states that Payment Rating is reported only for statuses 05/13/65/88/89/94/95 and is blank otherwise. Port whichever rule the guide confirms, and note it in `DEVIATIONS.md`. |
+| M8 | `PAYMENT_RATING_FOR_STATUS` maps status 11→`0`, 71→`1`, and so on. | ⚠ **Verify against the CRRG** before encoding the rule. The CRRG states that Payment Rating is reported only for statuses 05/13/65/88/89/94/95 and is blank otherwise. Port whichever rule the guide confirms, and cite the source in the rule's docs. |
 | M9 | Reader RDW mode: read 4 digits, then `rdw-4` more characters. A non-digit is "invalid RDW", `rdw < 4` is invalid, and a short read is "truncated record". Header and trailer RDWs are **normalized** (fixed-length files pad them, e.g. `0470`). Newline mode skips empty lines. | **Kept**. |
 | M10 | `_detect_type` always reports **offset 0** in its error. | **Changed**: it reports the real offset. |
 | M11 | `Reader.__iter__` flattens to header, base, segments…, trailer. | **Kept** as `Reader::records() -> impl Iterator<Item = Result<Metro2Record>>`. |
@@ -82,7 +82,7 @@ These are the subtleties found while reading the code and tests. Each one is eit
 | N12 | Reader: `as_record_type` dispatches on the first character. The structured reader uses `file_header()`, `company_batches()`, `entries()`, `company_batch_control()` and `file_control()`, built on `next_record(expected_type, None)`, which peeks. | **Kept** as pull methods. A tree parser (`File::parse`) and `File::validate()` are **added**. Filler `9…9` lines are skipped. |
 | N13 | `EntryDetail.mask()` mutates the account number to `X` repeated 17 times. | **Changed**: `mask(&self) -> Self` returns a masked copy. |
 
-Every **Changed** row that alters bytes on the wire gets an entry in `DEVIATIONS.md` at the repo root, with a before/after example. Rows marked ⚠ need to be checked against the governing spec (CDIA CRRG for Metro 2, NACHA Operating Rules for NACHA) before that stage is marked complete.
+Every **Changed** row that alters bytes on the wire is documented, with its source, in the crate docs. Rows marked ⚠ need to be checked against the governing spec (CDIA CRRG for Metro 2, NACHA Operating Rules for NACHA) before that stage is marked complete.
 
 ---
 
@@ -93,7 +93,6 @@ bryl-rs/
 ├── Cargo.toml                 # [workspace] resolver = "3", shared [workspace.package]/[workspace.dependencies]/[workspace.lints]
 ├── rust-toolchain.toml        # channel = "stable"
 ├── implementation.md          # this plan (deleted when all stages complete)
-├── DEVIATIONS.md              # every intentional output difference from lms-python
 ├── crates/
 │   ├── bryl/                  # runtime: field codecs, Record/Code traits, Encoder/Decoder, readers, errors
 │   │   ├── src/{lib.rs, field.rs, codec/{alpha,numeric,datetime,option}.rs, record.rs, code.rs,
@@ -183,7 +182,7 @@ Built-in implementations:
 | `#[derive(Code)]` enums | Alpha or Numeric | `as_code()` then the Alpha/Numeric rules | `from_code()`; an unknown code → `FieldErrorKind::UnknownCode` |
 | `#[derive(Record)]` structs (flatten) | n/a | delegate | delegate |
 
-**Date tokens:** `YYYY`, `YY`, `MM`, `DD`, `DDD` (and its alias `JJJ`, day of year), `hh` (24h), `HH` (12h), `mm`, `ss`, `pp` (AM/PM), and literal characters. These are parsed in `bryl-derive/src/pattern.rs`, and an unknown or ambiguous token is a **compile error** that points at the pattern. We use our own tokenizer rather than chrono's strftime to avoid the two-digit-year pivot ambiguity: `YY` decodes as `2000 + yy`. Python's pivot gives 69–99 → 19xx, but no field in either format carries pre-2000 two-digit years; this is documented in `DEVIATIONS.md`. The field length is the pattern length, as in Python.
+**Date tokens:** `YYYY`, `YY`, `MM`, `DD`, `DDD` (and its alias `JJJ`, day of year), `hh` (24h), `HH` (12h), `mm`, `ss`, `pp` (AM/PM), and literal characters. These are parsed in `bryl-derive/src/pattern.rs`, and an unknown or ambiguous token is a **compile error** that points at the pattern. We use our own tokenizer rather than chrono's strftime to avoid the two-digit-year pivot ambiguity: `YY` decodes as `2000 + yy`. Python's pivot gives 69–99 → 19xx, but no field in either format carries pre-2000 two-digit years; this is documented on the `YY` token. The field length is the pattern length, as in Python.
 
 ### Sanitize (replaces the global `ctx`)
 
@@ -463,7 +462,7 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 - `BlockSource` reports a short final block as `Truncated` instead of handing it to the decoder, and assembles partial reads.
 
 ### Stage 4: `bryl-nacha`
-**Goal**: records, codes, `RoutingNumber`, `Entry`, the typestate writer, the reader, `File::parse`, and `File::validate`, with N1–N13 applied and documented in `DEVIATIONS.md`.
+**Goal**: records, codes, `RoutingNumber`, `Entry`, the typestate writer, the reader, `File::parse`, and `File::validate`, with N1–N13 applied and documented in the crate docs.
 **Success criteria**: every `test_nacha.py` behavior is ported. Golden files (generated by `tools/gen_golden.py` from lms-python, then hand-patched only at the documented deviation columns) match byte for byte, and `File::validate()` on our own output reports no issues.
 **Tests**: ports of `TestEnum` (→ `Code`), `TestFileHeader` through `TestFileControl`, `TestTransactionCodeFor`, `TestEntryDetailProperties`, `TestEntry`, `TestWriter*`, `TestReader`, and `TestMalformedError`, plus:
 - addenda sequence starting at 1
@@ -489,7 +488,7 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 
 ### Stage 5: `bryl-metro2`
 **Goal**: records, the 18 code enums, `DataRecord`, validation, the writer, and the reader, with M1–M12 applied (BDW excluded) and documented.
-**Success criteria**: every `test_metro2.py` behavior is ported, and the moov-io fixtures (copied into `tests/fixtures/` with their Apache-2.0 NOTICE) parse with the expected values. Writer output for the shared scenarios matches the Python golden files except where `DEVIATIONS.md` says otherwise.
+**Success criteria**: every `test_metro2.py` behavior is ported, and the moov-io fixtures (copied into `tests/fixtures/` with their Apache-2.0 NOTICE) parse with the expected values. Writer output for the shared scenarios matches the golden files except at the documented spec fixes.
 **Tests**: ports of every class in `test_metro2.py`, including the field offsets (also asserted at compile time), the code-table counts (`ALL.len()`), the trailer totals, newline mode, malformed input, and `TestGoTestData*`, plus:
 - unknown status code rejected on read and write
 - `BaseSegment::validate()` called by the writer
@@ -498,7 +497,7 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
 **Status**: Complete. 156 tests: records and codes (43), data records (18), validation (19), writer and trailer totals (28), reader, `File` and moov-io data (41), golden byte comparison (5), doctests (2). Also passes on 1.85. Both moov-io reference files (RDW and newline) parse, and `File::validate` finds that their trailers match ours.
 **Notes** (departures from the design above):
 - **The RDW stays a field (M4).** `BaseSegment::record_descriptor_word: u16`, defaulting to 426, is read from files and recomputed when writing a `DataRecord`. This keeps every field offset equal to the spec's (and the Python tests'). The plan proposed not storing it.
-- **Payment rating (M8):** Python's table is kept as `AccountStatus::required_payment_rating` and is flagged ⚠ in DEVIATIONS. The writer enforces it by default (M7); `Writer::validate(false)` turns that off.
+- **Payment rating (M8):** Python's table is kept as `AccountStatus::required_payment_rating` and is flagged ⚠ in its docs. The writer enforces it by default (M7); `Writer::validate(false)` turns that off.
 - **Code tables** were generated from `metro2.py`'s dicts (274 codes; variant names are the Python keys in PascalCase; generation codes `II`–`IX` became `Second`–`Ninth`). The blank payment history code is a space in `PaymentHistoryProfile`, a validated `alpha(24)` newtype.
 - **Stricter decoding (M13, M14):** truncated and repeated segments are errors, as is a record over 9999 characters.
 - **Writer:** `Writer::begin_file(&HeaderRecord)`; Python's keyword parameters (with `date_created` defaulting to `activity_date`) became the `HeaderRecord` builder, where `date_created` is required. Python's `data_record(base, **kwargs)` convenience is dropped. `FileWriter::trailer()` shows the running totals.
@@ -530,10 +529,10 @@ Each stage leaves the workspace compiling, with `fmt`, `clippy -D warnings` and 
   - **N8, changed:** addenda limits follow moov-io/ach. TRC, ADV, COR, MTE, POS and SHR take no type-05 addenda (COR and MTE/POS/SHR need types 98/02, which are not supported). DNE and ENR need exactly one (`StandardEntryClass::min_addenda`, `IssueKind::TooFewAddenda`).
   - **N7, confirmed:** right-aligned with a leading blank, per NACHA's developer guide.
   - **M6, confirmed:** `base records + 2`, as moov-io computes it.
-  - M8 and N8 stay ⚠ in DEVIATIONS.md because they rest on moov-io rather than the paid spec text.
+  - M8 and N8 stay ⚠ because they rest on moov-io rather than the paid spec text.
 - **Stretch goal, not done:** block descriptor words. moov-io treats them as part of the packed (binary) format, and its one character-format sample has a block descriptor word before the header only. There is no consistent layout to implement without the CRRG (recorded as M12).
 
-When all stages are complete, `implementation.md` is deleted (per the global CLAUDE.md) and `DEVIATIONS.md` stays.
+When all stages are complete, `implementation.md` is deleted (per the global CLAUDE.md).
 
 ---
 
@@ -541,7 +540,7 @@ When all stages are complete, `implementation.md` is deleted (per the global CLA
 
 1. **Per-stage gates**: `cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && RUSTDOCFLAGS=-D\ warnings cargo doc --workspace --no-deps`.
 2. **Behavioral parity**: every Python test has a Rust counterpart. A mapping table (Python test → Rust test, and "adapted because …" where a deviation applies) is kept at the top of each crate's `tests/` directory and reviewed at the end of each stage.
-3. **Byte-level parity**: `tools/gen_golden.py` runs inside `lms-python` (`cd backend && python ../../bryl-rs/tools/gen_golden.py`) and writes the NACHA and Metro 2 scenarios used in the tests to `crates/*/tests/fixtures/golden/`. The Rust tests diff their own output against these files, with an explicit allow-list of `(line, column range)` deviations taken from `DEVIATIONS.md`.
+3. **Byte-level parity**: `tools/gen_golden.py` runs inside `lms-python` (`cd backend && python ../../bryl-rs/tools/gen_golden.py`) and writes the NACHA and Metro 2 scenarios used in the tests to `crates/*/tests/fixtures/golden/`. The Rust tests diff their own output against these files, with an explicit allow-list of `(line, column range)` deviations for the documented spec fixes.
 4. **External reference data**: the moov-io Metro 2 test data at `~/Web/go-metro2/test/testdata` (header, segments, fixed file, newline request file).
 5. **End to end**: `cargo run -p bryl-nacha --example write_sample > x.ach`, then `cargo run -p bryl-nacha --example check -- x.ach` should report no issues. Do the same with `-p bryl-metro2` (add `-- --newline` to both for newline framing).
 
@@ -560,5 +559,5 @@ Upstart's `metro_2` gem and vendor documentation):
 - **Status 05** is rejected on write (M18), retired by CDIA in April 2022.
 - The Metro 2 golden scenarios now use letters-and-digits account numbers, and the golden test applies the block-count deviation.
 - **NACHA follow-up** (NACHA's developer guide, four banks' published specs, moov-io/ach): N8 limits for PPD/CCD/WEB/TEL/CTX confirmed and its ⚠ removed; BOC added (N16); SEC debit/credit rules with a reversal exemption (N17); required `AUTOENROLL`/`REDEPCHECK` descriptions (N18); ascending batch numbers checked on read (N19); `Writer::line_ending` for CRLF (N20). N1, N2, N3, N5, N6 and N14 were confirmed unchanged.
-- **`DEVIATIONS.md` retired.** The project is not migrating from the Python modules, so the Python comparison was dropped. The spec findings and their sources now live in the crate documentation: `nacha` and `metro2` each have **Sources** sections (plus **Bank differences** for NACHA and **Not supported** for Metro 2), and the individual rules cite their sources in their item docs. IDs such as B5, N3 and M8 in this plan refer to the retired table.
+- **Python comparison dropped.** The project is not migrating from the Python modules. The spec findings and their sources now live in the crate documentation: `nacha` and `metro2` each have **Sources** sections (plus **Bank differences** for NACHA and **Not supported** for Metro 2), and the individual rules cite their sources in their item docs. IDs such as B5, N3 and M8 refer to the tables in this plan.
 - **Golden files replaced by snapshots.** The Python-generated golden files, `tools/gen_golden.py` and the tests reading Python output were removed. `tests/snapshots.rs` in each format crate compares the writer's output with committed snapshots of its own output (`UPDATE_SNAPSHOTS=1` regenerates them); the snapshots were verified byte-identical to the previously checked output before the golden tests were deleted.
