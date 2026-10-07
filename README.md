@@ -72,3 +72,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
   ```
 - The Metro 2 reference files in `crates/bryl-metro2/tests/fixtures/moov`
   come from [moov-io/metro2](https://github.com/moov-io/metro2) (Apache-2.0).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
+
+The moov-io reference files in `crates/bryl-metro2/tests/fixtures/moov` and
+`fuzz/seeds/metro2_file` remain under moov-io's Apache License 2.0 (see the
+`LICENSE` and `MOOV-LICENSE` files beside them).

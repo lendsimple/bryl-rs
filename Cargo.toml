@@ -14,6 +14,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Michael Lavers <kolanos@gmail.com>"]
+license = "MIT"
 publish = false
 
 [workspace.dependencies]
