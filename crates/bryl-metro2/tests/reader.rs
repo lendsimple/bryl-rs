@@ -228,7 +228,7 @@ mod newline {
             ],
             true,
         ));
-        assert!(file.data_records[0].j1.is_empty());
+        assert_eq!(file.data_records[0].j1, Vec::<J1Segment>::new());
         assert_eq!(file.data_records[1].j1.len(), 1);
     }
 
@@ -328,7 +328,7 @@ mod malformed {
         let records = read_data_records(&input);
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].base.surname, "SMITH");
-        assert!(records[0].j1.is_empty());
+        assert_eq!(records[0].j1, Vec::<J1Segment>::new());
     }
 
     #[test]

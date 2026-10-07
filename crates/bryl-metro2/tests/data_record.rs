@@ -5,7 +5,7 @@ mod common;
 
 use bryl::Record;
 use common::*;
-use metro2::{BaseSegment, DataRecord, Error, Segment};
+use metro2::{BaseSegment, DataRecord, Error, J1Segment, Segment};
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -91,7 +91,7 @@ fn segment_order() {
 fn decode_base_only() {
     let record = DataRecord::decode(DataRecord::new(base()).encode().unwrap().as_bytes()).unwrap();
     assert_eq!(record.base.surname, "SMITH");
-    assert!(record.j1.is_empty());
+    assert_eq!(record.j1, Vec::<J1Segment>::new());
     assert_eq!(record.k1, None);
 }
 
@@ -167,7 +167,7 @@ fn unknown_segment_id_stops_decoding() {
         " ".repeat(32)
     );
     let record = DataRecord::decode(raw.as_bytes()).unwrap();
-    assert!(record.j1.is_empty());
+    assert_eq!(record.j1, Vec::<J1Segment>::new());
 }
 
 #[test]
