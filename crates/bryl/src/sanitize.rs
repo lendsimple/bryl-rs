@@ -2,9 +2,10 @@ use std::borrow::Cow;
 
 /// Normalization applied to alphanumeric values while encoding.
 ///
-/// Replaces the Python library's thread-local `ctx`. Sanitizing only happens on
-/// encode; decoding never alters data. The steps run in the order filter,
-/// truncate, upper.
+/// Set per record ([`crate::Record::SANITIZE`]), per field, or per encode
+/// call; there is no global setting. Sanitizing only happens on encode;
+/// decoding never alters data. The steps run in the order filter, truncate,
+/// upper.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Sanitize {
     /// Uppercase ASCII letters.

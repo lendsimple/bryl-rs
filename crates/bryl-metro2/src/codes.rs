@@ -339,9 +339,8 @@ pub enum PaymentRating {
 
 /// One month of the 24-month payment history profile.
 ///
-/// The blank code (no history reported, `" "` in Python) is not a variant:
-/// it is a space in [`crate::PaymentHistoryProfile`], because codes cannot be
-/// blank.
+/// The blank code (no history reported) is not a variant: it is a space in
+/// [`crate::PaymentHistoryProfile`], because codes cannot be blank.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PaymentHistoryCode {
     /// `0`

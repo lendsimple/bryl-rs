@@ -227,8 +227,7 @@ pub enum AccountKind {
 }
 
 impl TransactionCode {
-    /// Picks the transaction code for an entry, as Python's
-    /// `EntryDetail.transaction_code_for` did: returns use the "returned"
+    /// Picks the transaction code for an entry: returns use the "returned"
     /// code, prenotes and zero amounts use the prenote code, negative amounts
     /// are debits and positive amounts credits.
     pub const fn for_entry(

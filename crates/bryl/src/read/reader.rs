@@ -6,8 +6,7 @@ use super::{Dispatch, Location, ReadError, ReadErrorKind, Source};
 ///
 /// Iterating yields every record. For structured formats, [`Reader::expect`]
 /// and [`Reader::next_if`] consume a record only if it is the expected type;
-/// otherwise it stays queued for the next call (Python's `next_record` with
-/// `retry`).
+/// otherwise it stays queued for the next call.
 ///
 /// A record that fails to decode is consumed along with its error, so
 /// iteration can continue past it.

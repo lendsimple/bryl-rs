@@ -3,9 +3,8 @@ use crate::Record;
 
 /// Decodes a raw record into one of several record types.
 ///
-/// Replaces the Python `as_record_type` callback. Format crates implement it
-/// for an enum of their record types, usually by looking at a record type
-/// code. Every [`Record`] implements it for itself.
+/// Format crates implement it for an enum of their record types, usually by
+/// looking at a record type code. Every [`Record`] implements it for itself.
 pub trait Dispatch: Sized {
     /// Decodes `raw`, choosing the record type from its content.
     ///

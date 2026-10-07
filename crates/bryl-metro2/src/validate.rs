@@ -141,8 +141,8 @@ impl AccountStatus {
     /// itself. Three independent sources agree on this list: moov-io/metro2's
     /// validator, Upstart's `metro_2` Ruby gem
     /// (`account_status_needs_payment_rating?`) and The Mortgage Office's
-    /// Metro 2 documentation. `metro2.py` instead required a rating per
-    /// delinquency status (e.g. `0` for 11); see DEVIATIONS.md (M8).
+    /// Metro 2 documentation. A rating per delinquency status (e.g. `0` for
+    /// 11) is not allowed; see DEVIATIONS.md (M8).
     pub const fn requires_payment_rating(self) -> bool {
         matches!(
             self,

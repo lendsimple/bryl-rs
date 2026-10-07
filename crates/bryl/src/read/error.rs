@@ -77,8 +77,8 @@ impl From<crate::Error> for ReadErrorKind {
 
 /// An error reading a record, with its location.
 ///
-/// Displays as `"{source} @ {location} - {reason}"`, like the Python
-/// `MalformedError`.
+/// Displays as `"{source} @ {location} - {reason}"`, e.g.
+/// `ach.txt @ line 4 - unknown record type 'X'`.
 #[derive(Debug, Error)]
 #[error("{source_name} @ {location} - {kind}")]
 pub struct ReadError {
