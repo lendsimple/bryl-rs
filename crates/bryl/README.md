@@ -11,3 +11,7 @@ and decoded from printable ASCII.
   field, or per encode call (`Sanitize`).
 
 See the crate documentation for the full attribute list.
+
+## License
+
+Licensed under the [MIT License](../../LICENSE).

@@ -67,3 +67,10 @@ The packed (binary) format is not supported, and blocked files can be read
 but not written. The crate documentation (`cargo doc -p bryl-metro2 --open`)
 covers account statuses, the validation rules and reading. Spec decisions are
 listed in the repository's `DEVIATIONS.md`.
+
+## License
+
+Licensed under the [MIT License](../../LICENSE).
+
+The moov-io reference files in `tests/fixtures/moov` are under moov-io's
+Apache License 2.0 (see `tests/fixtures/moov/LICENSE`).

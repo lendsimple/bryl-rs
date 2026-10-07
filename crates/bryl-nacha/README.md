@@ -67,3 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 The crate documentation (`cargo doc -p bryl-nacha --open`) covers the rules,
 errors and configuration. Spec decisions are listed in the repository's
 `DEVIATIONS.md`.
+
+## License
+
+Licensed under the [MIT License](../../LICENSE).
