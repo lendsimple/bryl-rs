@@ -93,6 +93,27 @@ mod codes {
         assert_eq!(SpecializedPaymentIndicator::Deferred.as_code(), 2);
         assert_eq!(GenerationCode::Third.as_code(), "3");
     }
+
+    #[test]
+    fn account_status_names_match_their_codes() {
+        // M16: these names were wrong in metro2.py (e.g. 61 was
+        // VOLUNTARY_SURRENDER, DF was DEFERRED). Pin them so a rename can't
+        // silently move a name to another code.
+        for (status, code) in [
+            (AccountStatus::PaidVoluntarySurrender, "61"),
+            (AccountStatus::PaidCollection, "62"),
+            (AccountStatus::PaidRepossession, "63"),
+            (AccountStatus::PaidChargeOff, "64"),
+            (AccountStatus::PaidForeclosureStarted, "65"),
+            (AccountStatus::GovernmentClaimFiled, "88"),
+            (AccountStatus::ForeclosureCompleted, "94"),
+            (AccountStatus::VoluntarySurrender, "95"),
+            (AccountStatus::Repossession, "96"),
+            (AccountStatus::DeleteAccountFraud, "DF"),
+        ] {
+            assert_eq!(status.as_code(), code, "{status:?}");
+        }
+    }
 }
 
 mod header {

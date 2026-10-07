@@ -1,6 +1,7 @@
 //! Metro 2 code tables, generated from `metro2.py`'s dictionaries. Variant
 //! names are the Python keys in `PascalCase`, except the generation codes
-//! (`II`–`IX` become `Second`–`Ninth`).
+//! (`II`–`IX` become `Second`–`Ninth`) and the account statuses, whose Python
+//! names were wrong for 61–65, 88, 94–96 and DF (see DEVIATIONS.md, M16).
 
 use bryl::Code;
 
@@ -230,75 +231,78 @@ pub enum AccountType {
 /// Account status.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AccountStatus {
-    /// `05`
+    /// `05`: account transferred to another office.
     #[code("05")]
     Transferred,
-    /// `11`
+    /// `11`: current account (0–29 days past the due date).
     #[code("11")]
     Current,
-    /// `13`
+    /// `13`: paid or closed account, zero balance.
     #[code("13")]
     PaidOrClosed,
-    /// `61`
+    /// `61`: account paid in full, was a voluntary surrender.
     #[code("61")]
-    VoluntarySurrender,
-    /// `62`
+    PaidVoluntarySurrender,
+    /// `62`: account paid in full, was a collection account.
     #[code("62")]
-    MfrCollected,
-    /// `63`
+    PaidCollection,
+    /// `63`: account paid in full, was a repossession.
     #[code("63")]
-    MfrNotCollected,
-    /// `64`
+    PaidRepossession,
+    /// `64`: account paid in full, was a charge-off.
     #[code("64")]
-    Foreclosure,
-    /// `65`
+    PaidChargeOff,
+    /// `65`: account paid in full; a foreclosure was started.
     #[code("65")]
-    VoluntarySurrenderAlt,
-    /// `71`
+    PaidForeclosureStarted,
+    /// `71`: 30–59 days past the due date.
     #[code("71")]
     Dpd30,
-    /// `78`
+    /// `78`: 60–89 days past the due date.
     #[code("78")]
     Dpd60,
-    /// `80`
+    /// `80`: 90–119 days past the due date.
     #[code("80")]
     Dpd90,
-    /// `82`
+    /// `82`: 120–149 days past the due date.
     #[code("82")]
     Dpd120,
-    /// `83`
+    /// `83`: 150–179 days past the due date.
     #[code("83")]
     Dpd150,
-    /// `84`
+    /// `84`: 180 or more days past the due date.
     #[code("84")]
     Dpd180,
-    /// `88`
+    /// `88`: claim filed with the government for the insured portion of the
+    /// balance on a defaulted loan.
     #[code("88")]
-    ClaimFiled,
-    /// `89`
+    GovernmentClaimFiled,
+    /// `89`: deed received in lieu of foreclosure on a defaulted mortgage;
+    /// there may be a balance due.
     #[code("89")]
     DeedReceived,
-    /// `93`
+    /// `93`: account assigned to internal or external collections.
     #[code("93")]
     Collections,
-    /// `94`
+    /// `94`: foreclosure completed; there may be a balance due.
     #[code("94")]
-    GovtClaimInsured,
-    /// `95`
+    ForeclosureCompleted,
+    /// `95`: voluntary surrender; there may be a balance due.
     #[code("95")]
-    GovtClaimGuaranteed,
-    /// `96`
+    VoluntarySurrender,
+    /// `96`: merchandise was repossessed; there may be a balance due.
     #[code("96")]
-    GovtClaimAdjustment,
-    /// `97`
+    Repossession,
+    /// `97`: unpaid balance reported as a loss (charge-off).
     #[code("97")]
     ChargeOff,
-    /// `DA`
+    /// `DA`: delete the entire account, for reasons other than fraud.
     #[code("DA")]
     DeleteAccount,
-    /// `DF`
+    /// `DF`: delete the entire account due to confirmed fraud (fraud
+    /// investigation completed).
     #[code("DF")]
-    Deferred,
+    DeleteAccountFraud,
 }
 
 /// Payment rating.

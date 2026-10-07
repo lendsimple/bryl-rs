@@ -558,7 +558,7 @@ mod moov {
         assert_eq!(base.social_security_number, 159_328_759);
         assert_eq!(base.surname, "SMITH-JONES");
         assert_eq!(base.first_name, "JUNIOR");
-        assert_eq!(base.account_status, AccountStatus::MfrCollected);
+        assert_eq!(base.account_status, AccountStatus::PaidCollection);
         assert_eq!(base.ecoa_code, metro2::EcoaCode::Individual);
         // Fixed-length format: the record is padded to its RDW of 1000.
         assert_eq!(base.record_descriptor_word, 1000);

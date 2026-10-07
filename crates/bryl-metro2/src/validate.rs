@@ -59,20 +59,22 @@ impl AccountStatus {
     /// records its condition just before that. Every other status must leave
     /// the payment rating blank.
     ///
-    /// This follows moov-io/metro2's validator, which matches the Credit
-    /// Reporting Resource Guide as far as public sources show. `metro2.py`
-    /// instead required a rating per delinquency status (e.g. `0` for 11); see
-    /// DEVIATIONS.md (M8).
+    /// Not yet checked against the Credit Reporting Resource Guide (CRRG)
+    /// itself. Three independent sources agree on this list: moov-io/metro2's
+    /// validator, Upstart's `metro_2` Ruby gem
+    /// (`account_status_needs_payment_rating?`) and The Mortgage Office's
+    /// Metro 2 documentation. `metro2.py` instead required a rating per
+    /// delinquency status (e.g. `0` for 11); see DEVIATIONS.md (M8).
     pub const fn requires_payment_rating(self) -> bool {
         matches!(
             self,
             Self::Transferred
                 | Self::PaidOrClosed
-                | Self::VoluntarySurrenderAlt
-                | Self::ClaimFiled
+                | Self::PaidForeclosureStarted
+                | Self::GovernmentClaimFiled
                 | Self::DeedReceived
-                | Self::GovtClaimInsured
-                | Self::GovtClaimGuaranteed
+                | Self::ForeclosureCompleted
+                | Self::VoluntarySurrender
         )
     }
 }
