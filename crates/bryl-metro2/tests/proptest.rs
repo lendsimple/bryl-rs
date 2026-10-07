@@ -9,12 +9,34 @@ use metro2::{
 };
 use proptest::prelude::*;
 
+/// Free text for fields without character rules (K1/N1 names).
 fn text(max: usize) -> impl Strategy<Value = String> {
-    proptest::string::string_regex(&format!(
-        "[A-Z0-9][A-Z0-9 ,.-]{{0,{}}}[A-Z0-9]|[A-Z0-9]",
+    pattern(&format!(
+        "[A-Z0-9][A-Z0-9 ,.&-]{{0,{}}}[A-Z0-9]|[A-Z0-9]",
         max - 2
     ))
-    .unwrap()
+}
+
+/// Letters, spaces and hyphens (CRRG name fields).
+fn name(max: usize) -> impl Strategy<Value = String> {
+    pattern(&format!("[A-Z][A-Z -]{{0,{}}}[A-Z]|[A-Z]", max - 2))
+}
+
+/// Letters, digits, spaces, slashes, dashes and periods (CRRG address fields).
+fn address(max: usize) -> impl Strategy<Value = String> {
+    pattern(&format!(
+        "[A-Z0-9][A-Z0-9 ./-]{{0,{}}}[A-Z0-9]|[A-Z0-9]",
+        max - 2
+    ))
+}
+
+/// Letters and digits (CRRG account and identification numbers).
+fn identifier(max: usize) -> impl Strategy<Value = String> {
+    pattern(&format!("[A-Z0-9]{{1,{max}}}"))
+}
+
+fn pattern(regex: &str) -> impl Strategy<Value = String> + use<> {
+    proptest::string::string_regex(regex).unwrap()
 }
 
 fn date() -> impl Strategy<Value = NaiveDate> {
@@ -24,7 +46,14 @@ fn date() -> impl Strategy<Value = NaiveDate> {
 
 fn base() -> impl Strategy<Value = BaseSegment> {
     (
-        proptest::sample::select(AccountStatus::ALL),
+        // Status 05 is retired and rejected by the writer (M18).
+        proptest::sample::select(
+            AccountStatus::ALL
+                .iter()
+                .copied()
+                .filter(|&s| s != AccountStatus::Transferred)
+                .collect::<Vec<_>>(),
+        ),
         proptest::sample::select(AccountType::ALL),
         proptest::sample::select(PortfolioType::ALL),
         proptest::sample::select(EcoaCode::ALL),
@@ -36,7 +65,7 @@ fn base() -> impl Strategy<Value = BaseSegment> {
         ),
         (0u32..=999_999_999, 0u32..=999_999_999, 0u32..=999_999_999),
         (0u32..=999_999_999, 0u64..=9_999_999_999),
-        (text(30), text(25), text(20), text(32)),
+        (identifier(30), name(25), name(20), address(32)),
     )
         .prop_map(
             |(status, account_type, portfolio, ecoa, dates, amounts, ids, names)| {
@@ -86,7 +115,7 @@ fn data_record() -> impl Strategy<Value = DataRecord> {
     (
         base(),
         proptest::collection::vec(
-            (text(25), proptest::option::of(date()), 0u32..=999_999_999),
+            (name(25), proptest::option::of(date()), 0u32..=999_999_999),
             0..3,
         ),
         proptest::option::of(text(30)),

@@ -23,9 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut writer = Writer::new(io::stdout().lock()).newline(newline);
     let mut file = writer.begin_file(&header)?;
     for (account, status, surname) in [
-        ("ACCT-001", AccountStatus::Current, "SMITH"),
-        ("ACCT-002", AccountStatus::Dpd60, "JONES"),
-        ("ACCT-003", AccountStatus::PaidOrClosed, "GARCIA"),
+        ("ACCT001", AccountStatus::Current, "SMITH"),
+        ("ACCT002", AccountStatus::Dpd60, "JONES"),
+        ("ACCT003", AccountStatus::PaidOrClosed, "GARCIA"),
     ] {
         let base = BaseSegment::builder()
             .identification_number("FURNISHER123")

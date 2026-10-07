@@ -65,7 +65,7 @@ mod layout {
         let records = [
             DataRecord::new(base()),
             DataRecord::new(BaseSegment {
-                consumer_account_number: "ACCT-002".into(),
+                consumer_account_number: "ACCT002".into(),
                 ..base()
             }),
         ];
@@ -87,7 +87,8 @@ mod layout {
         file.write(&DataRecord::new(base())).unwrap();
         assert_eq!(file.trailer().total_base_records, 1);
         let trailer = file.finish().unwrap();
-        assert_eq!(trailer.block_count, 3);
+        // Unblocked files report a block count of 0 (M6).
+        assert_eq!(trailer.block_count, 0);
         let output = writer.into_inner();
         assert_eq!(
             output[output.len() - 426..],
@@ -115,9 +116,10 @@ mod totals {
     }
 
     #[test]
-    fn block_count() {
+    fn block_count_is_zero_for_unblocked_files() {
+        // M6: metro2.py and moov-io wrote base records + 2.
         let t = trailer_of(&vec![DataRecord::new(base()); 2]);
-        assert_eq!(t.block_count, 4);
+        assert_eq!(t.block_count, 0);
     }
 
     #[test]
@@ -140,11 +142,13 @@ mod totals {
 
     #[test]
     fn every_status_has_a_counter() {
+        // Counted from the records directly: the writer rejects the retired
+        // status 05 (M18), but files read back may still contain it.
         let records: Vec<_> = AccountStatus::ALL
             .iter()
             .map(|&s| DataRecord::new(base_with_status(s)))
             .collect();
-        let t = trailer_of(&records);
+        let t = TrailerRecord::from_records(&records);
         assert_eq!(t.total_base_records, 23);
         let raw = t.encode().unwrap();
         for spec in TrailerRecord::FIELDS
@@ -329,7 +333,7 @@ mod totals {
         assert_eq!(t.total_ssns_all_segments, 5);
         assert_eq!(t.total_dobs_all_segments, 5);
         assert_eq!(t.total_telephone_numbers, 5);
-        assert_eq!(t.block_count, 7);
+        assert_eq!(t.block_count, 0);
     }
 
     #[test]
@@ -359,13 +363,13 @@ mod validation {
         else {
             panic!("expected Invalid, got {err:?}");
         };
-        assert_eq!(account, "ACCT-000001");
+        assert_eq!(account, "ACCT000001");
         assert!(matches!(
             violations[..],
             [Violation::PaymentRatingNotAllowed { .. }]
         ));
         assert!(err.to_string().starts_with(
-            "account ACCT-000001: Payment rating must be blank for account status '11'"
+            "account ACCT000001: Payment rating must be blank for account status '11'"
         ));
         assert_eq!(file.trailer().total_base_records, 0);
         file.finish().unwrap();

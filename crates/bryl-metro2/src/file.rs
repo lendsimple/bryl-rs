@@ -20,6 +20,9 @@ pub struct File {
     pub data_records: Vec<DataRecord>,
     /// The trailer record.
     pub trailer: TrailerRecord,
+    /// Blocks in a variable-blocked file (see [`Reader::blocks`]); 0 if it is
+    /// not blocked.
+    pub blocks: usize,
 }
 
 /// A problem found by [`File::validate`].
@@ -35,7 +38,7 @@ pub enum Issue {
         /// Value in the trailer.
         recorded: u64,
     },
-    /// A data record's base segment breaks a rule.
+    /// A data record breaks a rule.
     Violation {
         /// Index of the data record.
         index: usize,
@@ -74,11 +77,12 @@ impl File {
         Reader::new(input).read_file()
     }
 
-    /// Recomputes the trailer and checks each base segment's rules.
+    /// Recomputes the trailer and checks each data record's rules. The block
+    /// count is checked only for blocked files.
     pub fn validate(&self) -> Vec<Issue> {
         let mut issues = Vec::new();
         for (index, record) in self.data_records.iter().enumerate() {
-            if let Err(violations) = record.base.validate() {
+            if let Err(violations) = record.validate() {
                 issues.extend(violations.into_iter().map(|violation| Issue::Violation {
                     index,
                     account: record.base.consumer_account_number.clone(),
@@ -86,7 +90,14 @@ impl File {
                 }));
             }
         }
-        let computed = TrailerRecord::from_records(&self.data_records);
+        let mut computed = TrailerRecord::from_records(&self.data_records);
+        // The block count only applies to blocked files; unblocked files may
+        // report 0 (the CRRG example) or records + 2 (moov-io, metro2.py).
+        computed.block_count = if self.blocks == 0 {
+            self.trailer.block_count
+        } else {
+            u32::try_from(self.blocks).unwrap_or(u32::MAX)
+        };
         issues.extend(trailer_differences(&computed, &self.trailer));
         issues
     }

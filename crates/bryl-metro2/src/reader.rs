@@ -6,7 +6,9 @@
 #![allow(clippy::result_large_err)]
 
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::io::{BufRead, ErrorKind, Read};
+use std::ops::Range;
 
 use bryl::Record;
 use bryl::read::{Dispatch, LineSource, Location, Raw, ReadError, ReadErrorKind, Source};
@@ -156,6 +158,116 @@ impl<R: Read> Source for RdwSource<R> {
     }
 }
 
+/// Smallest record: header, base segment and trailer are 426 characters.
+const MIN_RECORD_LENGTH: usize = 426;
+
+/// True if `unit` is a single header or trailer record (not a block).
+fn is_plain_header_or_trailer(unit: &[u8]) -> bool {
+    unit.get(4..10) == Some(b"HEADER") || unit.get(4..11) == Some(b"TRAILER")
+}
+
+/// Splits a variable block (a 4-digit block descriptor word followed by
+/// RDW-prefixed records and optional blank padding) into its records' byte
+/// ranges. Returns `None` if `unit` is not a well-formed block: every record
+/// must have a valid record descriptor word, start like a header, trailer or
+/// base segment, and fit in the block.
+fn split_block(unit: &[u8]) -> Option<Vec<Range<usize>>> {
+    let mut records = Vec::new();
+    let mut pos = 4;
+    while pos < unit.len() {
+        if unit[pos..].iter().all(|&b| b == b' ') {
+            break;
+        }
+        let rdw = unit.get(pos..pos + 4)?;
+        if !rdw.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        let length: usize = std::str::from_utf8(rdw).ok()?.parse().ok()?;
+        let end = pos + length;
+        let record = unit.get(pos..end)?;
+        let starts_like_a_record =
+            is_plain_header_or_trailer(record) || record.get(4) == Some(&b'1');
+        if length < MIN_RECORD_LENGTH || !starts_like_a_record {
+            return None;
+        }
+        records.push(pos..end);
+        pos = end;
+    }
+    (!records.is_empty()).then_some(records)
+}
+
+/// Unpacks variable-blocked files: a block descriptor word (BDW) holding one
+/// or more records.
+///
+/// A file is blocked if its first unit is a block whose first record is the
+/// header. Unblocked files pass through unchanged. In a blocked file, a unit
+/// that is not a well-formed block is passed through as a single record, so
+/// files that block only some records (as moov-io/metro2's sample does) are
+/// read too.
+#[derive(Debug)]
+struct Blocks<S> {
+    inner: S,
+    blocked: Option<bool>,
+    pending: VecDeque<Raw>,
+    /// Blocks read so far.
+    count: usize,
+}
+
+impl<S: Source> Blocks<S> {
+    fn new(inner: S) -> Self {
+        Self {
+            inner,
+            blocked: None,
+            pending: VecDeque::new(),
+            count: 0,
+        }
+    }
+}
+
+impl<S: Source> Source for Blocks<S> {
+    fn next_raw(&mut self) -> Result<Option<Raw>, ReadErrorKind> {
+        if let Some(raw) = self.pending.pop_front() {
+            return Ok(Some(raw));
+        }
+        let Some(unit) = self.inner.next_raw()? else {
+            return Ok(None);
+        };
+        let blocked = *self.blocked.get_or_insert_with(|| {
+            split_block(&unit.bytes).is_some_and(|records| {
+                unit.bytes.get(records[0].start + 4..records[0].start + 10) == Some(b"HEADER")
+            })
+        });
+        if !blocked {
+            return Ok(Some(unit));
+        }
+        // In a blocked file every unit is a block; a record outside a block
+        // counts as a block of one.
+        self.count += 1;
+        if is_plain_header_or_trailer(&unit.bytes) {
+            return Ok(Some(unit));
+        }
+        let Some(records) = split_block(&unit.bytes) else {
+            return Ok(Some(unit));
+        };
+        for range in records {
+            let location = match unit.location {
+                Location::Offset(offset) => Location::Offset(offset + range.start as u64),
+                line @ Location::Line(_) => line,
+            };
+            self.pending.push_back(Raw {
+                bytes: unit.bytes[range].to_vec(),
+                terminator: Vec::new(),
+                location,
+            });
+        }
+        Ok(self.pending.pop_front())
+    }
+
+    fn location(&self) -> Location {
+        self.inner.location()
+    }
+}
+
 /// How records are separated.
 #[derive(Debug)]
 enum Framing<R> {
@@ -185,6 +297,9 @@ impl<R: BufRead> Source for Framing<R> {
 /// errors are located by byte offset; [`Reader::newline`] switches to one
 /// record per line (blank lines are skipped) located by line number.
 ///
+/// Variable-blocked files, where block descriptor words group records into
+/// blocks, are read in either mode; see [`Reader::blocks`].
+///
 /// ```
 /// # fn read(input: &[u8]) -> Result<(), bryl::read::ReadError> {
 /// let mut reader = metro2::Reader::new(input);
@@ -198,18 +313,18 @@ impl<R: BufRead> Source for Framing<R> {
 /// ```
 #[derive(Debug)]
 pub struct Reader<R> {
-    inner: bryl::read::Reader<Framing<R>, Metro2Record>,
+    inner: bryl::read::Reader<Blocks<Framing<R>>, Metro2Record>,
 }
 
 impl<R: BufRead> Reader<R> {
     /// Reads RDW-framed records from `input`.
     pub fn new(input: R) -> Self {
         Self {
-            inner: bryl::read::Reader::new(Framing::Rdw(RdwSource {
+            inner: bryl::read::Reader::new(Blocks::new(Framing::Rdw(RdwSource {
                 reader: input,
                 offset: 0,
                 next_offset: 0,
-            })),
+            }))),
         }
     }
 
@@ -218,7 +333,7 @@ impl<R: BufRead> Reader<R> {
     #[must_use]
     pub fn newline(self, newline: bool) -> Self {
         let name = self.inner.name().to_owned();
-        let input = match self.inner.into_inner() {
+        let input = match self.inner.into_inner().inner {
             Framing::Rdw(source) => source.reader,
             Framing::Lines(source) => source.into_inner(),
         };
@@ -232,8 +347,14 @@ impl<R: BufRead> Reader<R> {
             })
         };
         Self {
-            inner: bryl::read::Reader::new(framing).with_name(name),
+            inner: bryl::read::Reader::new(Blocks::new(framing)).with_name(name),
         }
+    }
+
+    /// Blocks read so far in a variable-blocked file, counting a record
+    /// outside a block as a block of one; 0 for a file that is not blocked.
+    pub fn blocks(&self) -> usize {
+        self.inner.source().count
     }
 
     /// Sets the input name used in errors.
@@ -315,6 +436,7 @@ impl<R: BufRead> Reader<R> {
             header,
             data_records,
             trailer,
+            blocks: self.blocks(),
         })
     }
 

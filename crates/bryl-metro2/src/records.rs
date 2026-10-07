@@ -558,7 +558,8 @@ pub struct TrailerRecord {
     pub total_j1_segments: u32,
     #[bryl(numeric(9))]
     pub total_j2_segments: u32,
-    /// Base records plus header and trailer.
+    /// Number of blocks in a variable-blocked file; 0 for files that are not
+    /// blocked.
     #[bryl(numeric(9))]
     pub block_count: u32,
     #[bryl(numeric(9))]

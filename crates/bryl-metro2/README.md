@@ -6,9 +6,11 @@ Metro 2 credit reporting files, character format (`use metro2::...`).
   code table as an enum.
 - `DataRecord`: a base segment and its segments; the record descriptor word is
   computed when writing.
-- `Writer` validates each base segment and computes the trailer; `Reader`
-  reads RDW-framed or newline-delimited files; `File::validate` recomputes
+- `Writer` validates each data record (cross-field rules, CRRG character
+  rules, retired codes) and computes the trailer; `Reader` reads RDW-framed,
+  newline-delimited and variable-blocked files; `File::validate` recomputes
   the trailer and re-checks every account.
 
-Not supported: packed (binary) format and variable-blocked files. Spec decisions
-are listed in the repository's `DEVIATIONS.md`.
+Variable-blocked files (block descriptor words) can be read but not written.
+The packed (binary) format is not supported. Spec decisions are listed in the
+repository's `DEVIATIONS.md`.

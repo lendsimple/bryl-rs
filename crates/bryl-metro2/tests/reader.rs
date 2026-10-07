@@ -16,8 +16,8 @@ use bryl::Record;
 use bryl::read::{Location, ReadErrorKind};
 use common::*;
 use metro2::{
-    AccountStatus, BaseSegment, DataRecord, File, Issue, J1Segment, J2Segment, K1Segment,
-    K3Segment, L1Segment, N1Segment, Reader, Segment, TrailerRecord,
+    AccountStatus, BaseSegment, CharClass, DataRecord, File, Issue, J1Segment, J2Segment,
+    K1Segment, K3Segment, L1Segment, N1Segment, Reader, Segment, TrailerRecord,
 };
 
 fn fixture(path: &str) -> String {
@@ -55,7 +55,7 @@ mod structured {
 
     #[test]
     fn multiple_data_records() {
-        let input: Vec<_> = ["ACCT-001", "ACCT-002", "ACCT-003"]
+        let input: Vec<_> = ["ACCT001", "ACCT002", "ACCT003"]
             .into_iter()
             .map(|account| {
                 DataRecord::new(BaseSegment {
@@ -69,7 +69,7 @@ mod structured {
             .iter()
             .map(|r| r.base.consumer_account_number.as_str())
             .collect();
-        assert_eq!(accounts, ["ACCT-001", "ACCT-002", "ACCT-003"]);
+        assert_eq!(accounts, ["ACCT001", "ACCT002", "ACCT003"]);
     }
 
     #[test]
@@ -80,7 +80,8 @@ mod structured {
         assert_eq!(reader.data_records().count(), 1);
         let trailer = reader.trailer().unwrap();
         assert_eq!(trailer.total_base_records, 1);
-        assert_eq!(trailer.block_count, 3);
+        assert_eq!(trailer.block_count, 0);
+        assert_eq!(reader.blocks(), 0);
         reader.finish().unwrap();
     }
 
@@ -422,14 +423,14 @@ mod roundtrip {
         let input: Vec<_> = (0..5)
             .map(|i| {
                 DataRecord::new(BaseSegment {
-                    consumer_account_number: format!("ACCT-{i:03}"),
+                    consumer_account_number: format!("ACCT{i:03}"),
                     ..base()
                 })
             })
             .collect();
         let file = File::read(write_file(&input, false).as_bytes()).unwrap();
         for (i, record) in file.data_records.iter().enumerate() {
-            assert_eq!(record.base.consumer_account_number, format!("ACCT-{i:03}"));
+            assert_eq!(record.base.consumer_account_number, format!("ACCT{i:03}"));
         }
     }
 
@@ -459,7 +460,7 @@ mod roundtrip {
         assert_eq!(trailer.total_ssns_all_segments, 6);
         assert_eq!(trailer.total_dobs_all_segments, 3);
         assert_eq!(trailer.total_telephone_numbers, 3);
-        assert_eq!(trailer.block_count, 5);
+        assert_eq!(trailer.block_count, 0);
     }
 
     #[test]
@@ -493,21 +494,15 @@ mod validate {
         let mut file =
             File::read(write_file(&[DataRecord::new(base())], false).as_bytes()).unwrap();
         file.trailer.total_status_code_11 = 2;
+        // The block count is "if applicable": not checked for unblocked files.
         file.trailer.block_count = 9;
         assert_eq!(
             file.validate(),
-            [
-                Issue::TrailerMismatch {
-                    field: "block_count",
-                    computed: 3,
-                    recorded: 9
-                },
-                Issue::TrailerMismatch {
-                    field: "total_status_code_11",
-                    computed: 1,
-                    recorded: 2
-                },
-            ]
+            [Issue::TrailerMismatch {
+                field: "total_status_code_11",
+                computed: 1,
+                recorded: 2
+            }]
         );
     }
 
@@ -520,7 +515,7 @@ mod validate {
         assert_eq!(issues.len(), 1);
         assert_eq!(
             issues[0].to_string(),
-            "data record 0 (account ACCT-000001): Amount past due must be 0 for status '11', got 5"
+            "data record 0 (account ACCT000001): Amount past due must be 0 for status '11', got 5"
         );
     }
 }
@@ -535,9 +530,34 @@ mod moov {
         File::read(fixture("moov/unpacked_fixed_file.dat").as_bytes()).unwrap()
     }
 
+    /// moov-io's sample data breaks the CRRG character rules in three places.
+    fn sample_character_issues() -> Vec<Issue> {
+        let issue = |field: &str, ch, position, allowed| Issue::Violation {
+            index: 0,
+            account: "553723456".into(),
+            violation: metro2::Violation::Characters {
+                field: field.into(),
+                ch,
+                position,
+                allowed,
+            },
+        };
+        vec![
+            issue("first_line_of_address", '+', 4, CharClass::Address),
+            issue("j2[0].second_line_of_address", '#', 6, CharClass::Address),
+            issue(
+                "l1.new_consumer_account_number",
+                ' ',
+                3,
+                CharClass::Identifier,
+            ),
+        ]
+    }
+
     #[test]
     fn fixed_file_validates() {
-        assert_eq!(fixed_file().validate(), []);
+        // The trailer matches; only moov-io's sample text breaks the rules.
+        assert_eq!(fixed_file().validate(), sample_character_issues());
     }
 
     #[test]
@@ -604,7 +624,25 @@ mod moov {
         assert_eq!(file.data_records.len(), 1);
         assert_eq!(file.trailer.total_base_records, 1);
         assert_eq!(file.trailer.block_count, 3);
-        assert_eq!(file.validate(), []);
+        assert_eq!(file.blocks, 0);
+        assert_eq!(file.validate(), sample_character_issues());
+    }
+
+    #[test]
+    fn variable_blocked_file() {
+        // M12: the header is in a block (`0496` + `0426HEADER…` + padding);
+        // the data record and trailer are not.
+        let file = Reader::new(fixture("moov/unpacked_variable_file.dat").as_bytes())
+            .newline(true)
+            .read_file()
+            .unwrap();
+        assert_eq!(file.header.reporter_name, "YOUR BUSINESS NAME HERE");
+        assert_eq!(file.data_records.len(), 1);
+        assert_eq!(file.data_records[0].base.surname, "SMITH-JONES");
+        // One block plus two records outside blocks; the trailer says 3.
+        assert_eq!(file.blocks, 3);
+        assert_eq!(file.trailer.block_count, 3);
+        assert_eq!(file.validate(), sample_character_issues());
     }
 
     #[test]
@@ -635,5 +673,154 @@ mod moov {
         // header_record.dat and base_segment.dat start with a block
         // descriptor word (`0430` before `0426HEADER`): the variable-blocked
         // format, not supported yet (M12).
+    }
+}
+
+mod blocked {
+    //! Variable-blocked files (M12): a 4-digit block descriptor word (the
+    //! block's length, counting itself) followed by RDW-prefixed records.
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn block(records: &[String]) -> String {
+        let content = records.concat();
+        format!("{:04}{content}", content.len() + 4)
+    }
+
+    fn trailer(blocks: u32, base_records: u32) -> String {
+        TrailerRecord {
+            total_base_records: base_records,
+            total_status_code_11: base_records,
+            block_count: blocks,
+            ..TrailerRecord::default()
+        }
+        .encode()
+        .unwrap()
+    }
+
+    fn data(account: &str) -> String {
+        DataRecord::new(BaseSegment {
+            consumer_account_number: account.into(),
+            ..base()
+        })
+        .encode()
+        .unwrap()
+    }
+
+    #[test]
+    fn every_record_in_its_own_block() {
+        let input = [
+            block(&[header().encode().unwrap()]),
+            block(&[data("ACCT1")]),
+            block(&[trailer(3, 1)]),
+        ]
+        .concat();
+        let mut reader = Reader::new(input.as_bytes());
+        let file = reader.read_file().unwrap();
+        assert_eq!(file.data_records[0].base.consumer_account_number, "ACCT1");
+        assert_eq!(file.blocks, 3);
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn several_records_in_one_block() {
+        let input = [
+            block(&[header().encode().unwrap()]),
+            block(&[data("ACCT1"), data("ACCT2"), data("ACCT3")]),
+            block(&[trailer(3, 3)]),
+        ]
+        .concat();
+        let file = File::read(input.as_bytes()).unwrap();
+        let accounts: Vec<_> = file
+            .data_records
+            .iter()
+            .map(|r| r.base.consumer_account_number.as_str())
+            .collect();
+        assert_eq!(accounts, ["ACCT1", "ACCT2", "ACCT3"]);
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn header_and_data_in_one_block_with_padding() {
+        let mut first = block(&[header().encode().unwrap(), data("ACCT1")]);
+        first.push_str(&" ".repeat(20));
+        first.replace_range(..4, &format!("{:04}", first.len()));
+        let input = [first, block(&[trailer(2, 1)])].concat();
+        let file = File::read(input.as_bytes()).unwrap();
+        assert_eq!(file.data_records.len(), 1);
+        assert_eq!(file.blocks, 2);
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn block_count_is_checked_for_blocked_files() {
+        let input = [
+            block(&[header().encode().unwrap()]),
+            block(&[data("ACCT1")]),
+            block(&[trailer(7, 1)]),
+        ]
+        .concat();
+        let file = File::read(input.as_bytes()).unwrap();
+        assert_eq!(
+            file.validate(),
+            [Issue::TrailerMismatch {
+                field: "block_count",
+                computed: 3,
+                recorded: 7
+            }]
+        );
+    }
+
+    #[test]
+    fn records_in_blocks_are_located_by_offset() {
+        let mut bad = data("ACCT2");
+        bad.replace_range(123..125, "99"); // unknown account status
+        let input = [
+            block(&[header().encode().unwrap()]),
+            block(&[data("ACCT1"), bad]),
+            block(&[trailer(3, 2)]),
+        ]
+        .concat();
+        let mut reader = Reader::new(input.as_bytes());
+        reader.header().unwrap();
+        let results: Vec<_> = reader.data_records().collect();
+        assert!(results[0].is_ok());
+        // Block at 430; its second record starts after the BDW and the first record.
+        assert_eq!(
+            results[1].as_ref().unwrap_err().location,
+            Location::Offset(430 + 4 + 426)
+        );
+    }
+
+    #[test]
+    fn blocked_newline_file() {
+        let input = [
+            block(&[header().encode().unwrap()]),
+            block(&[data("ACCT1"), data("ACCT2")]),
+            block(&[trailer(3, 2)]),
+        ]
+        .join("\n");
+        let file = Reader::new(input.as_bytes())
+            .newline(true)
+            .read_file()
+            .unwrap();
+        assert_eq!(file.data_records.len(), 2);
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn unblocked_files_are_never_split() {
+        // A large unblocked record whose bytes 4-8 happen to be digits that
+        // could pass for a record length is still read as one record.
+        let record = DataRecord {
+            j2: vec![j2(); 4],
+            ..DataRecord::new(BaseSegment {
+                time_stamp: Some(datetime(2020, 1, 11, 10, 0, 0)),
+                ..base()
+            })
+        };
+        let file = File::read(write_file(&[record], false).as_bytes()).unwrap();
+        assert_eq!(file.data_records[0].j2.len(), 4);
+        assert_eq!(file.blocks, 0);
     }
 }

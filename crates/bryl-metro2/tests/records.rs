@@ -203,7 +203,7 @@ mod base {
         let b2 = BaseSegment::decode(b.encode().unwrap().as_bytes()).unwrap();
         assert_eq!(b2, b);
         assert_eq!(b2.identification_number, "FURNISHER123");
-        assert_eq!(b2.consumer_account_number, "ACCT-000001");
+        assert_eq!(b2.consumer_account_number, "ACCT000001");
         assert_eq!(b2.portfolio_type, PortfolioType::Installment);
         assert_eq!(b2.account_type, AccountType::Unsecured);
         assert_eq!(b2.date_opened, date(2019, 6, 15));
@@ -472,11 +472,11 @@ mod segments {
     fn l1() {
         let segment = L1Segment {
             change_indicator: ChangeIndicator::Both,
-            new_consumer_account_number: "NEW-ACCT-999".into(),
-            new_identification_number: "NEW-ID-888".into(),
+            new_consumer_account_number: "NEWACCT999".into(),
+            new_identification_number: "NEWID888".into(),
             ..common::l1()
         };
-        assert_eq!(roundtrip(&segment).new_identification_number, "NEW-ID-888");
+        assert_eq!(roundtrip(&segment).new_identification_number, "NEWID888");
     }
 
     #[test]

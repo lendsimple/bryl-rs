@@ -544,3 +544,18 @@ When all stages are complete, `implementation.md` is deleted (per the global CLA
 3. **Byte-level parity**: `tools/gen_golden.py` runs inside `lms-python` (`cd backend && python ../../bryl-rs/tools/gen_golden.py`) and writes the NACHA and Metro 2 scenarios used in the tests to `crates/*/tests/fixtures/golden/`. The Rust tests diff their own output against these files, with an explicit allow-list of `(line, column range)` deviations taken from `DEVIATIONS.md`.
 4. **External reference data**: the moov-io Metro 2 test data at `~/Web/go-metro2/test/testdata` (header, segments, fixed file, newline request file).
 5. **End to end**: `cargo run -p bryl-nacha --example write_sample > x.ach`, then `cargo run -p bryl-nacha --example check -- x.ach` should report no issues. Do the same with `-p bryl-metro2` (add `-- --newline` to both for newline framing).
+
+---
+
+## After Stage 6
+
+Follow-up changes after research into the remaining Metro 2 questions
+(CDIA's 2020 CRRG, CDIA's public announcements, and moov-io/metro2,
+Upstart's `metro_2` gem and vendor documentation):
+
+- **Account status variants renamed** (M16) and the M8 payment-rating rule corroborated by three independent sources.
+- **Trailer block count** is 0 for the unblocked files the writer produces (M6).
+- **Variable-blocked files** are read (M12): one or more records per block, blocked header/data/trailer, blank padding. `Reader::blocks`/`File::blocks` count blocks, and `File::validate` checks the block count only for blocked files.
+- **Character rules** (M17): `DataRecord::validate` checks names, addresses and account/identification numbers (base, J1, J2, L1).
+- **Status 05** is rejected on write (M18), retired by CDIA in April 2022.
+- The Metro 2 golden scenarios now use letters-and-digits account numbers, and the golden test applies the block-count deviation.

@@ -33,7 +33,7 @@ pub fn header() -> HeaderRecord {
 pub fn base() -> BaseSegment {
     BaseSegment::builder()
         .identification_number("FURNISHER123")
-        .consumer_account_number("ACCT-000001")
+        .consumer_account_number("ACCT000001")
         .portfolio_type(PortfolioType::Installment)
         .account_type(AccountType::Unsecured)
         .date_opened(date(2019, 6, 15))

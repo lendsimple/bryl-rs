@@ -47,6 +47,11 @@ impl<S: Source, D: Dispatch> Reader<S, D> {
             .map_or_else(|| self.source.location(), |(_, location)| *location)
     }
 
+    /// The wrapped source.
+    pub fn source(&self) -> &S {
+        &self.source
+    }
+
     /// Returns the wrapped source.
     pub fn into_inner(self) -> S {
         self.source

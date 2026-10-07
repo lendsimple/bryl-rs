@@ -1,6 +1,7 @@
 //! Byte-for-byte comparison with files written by lms-python's `metro2.py`
-//! (`tools/gen_golden.py`). None of the Metro 2 deviations change written
-//! bytes, so the output must match exactly.
+//! (`tools/gen_golden.py`). The one deviation that changes written bytes,
+//! the trailer block count (M6), is applied to the Python output by
+//! `zero_block_count`; everything else must match exactly.
 
 mod common;
 
@@ -20,6 +21,18 @@ fn golden(name: &str) -> String {
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap()
+}
+
+/// M6: unblocked files report a trailer block count of 0; `metro2.py` wrote
+/// base records + 2 (trailer positions 57-65).
+fn zero_block_count(mut output: String) -> String {
+    let trailer = output.rfind("TRAILER").expect("trailer") - 4;
+    output.replace_range(trailer + 56..trailer + 65, "000000000");
+    output
+}
+
+fn expected(name: &str) -> String {
+    zero_block_count(golden(name))
 }
 
 fn write(records: &[DataRecord], newline: bool) -> String {
@@ -42,7 +55,7 @@ fn write(records: &[DataRecord], newline: bool) -> String {
 fn base_only() {
     assert_eq!(
         write(&[DataRecord::new(base())], false),
-        golden("base_only")
+        expected("base_only")
     );
 }
 
@@ -104,8 +117,8 @@ fn all_segments() {
         }),
         l1: Some(L1Segment {
             change_indicator: ChangeIndicator::Both,
-            new_consumer_account_number: "NEW-ACCT-999".into(),
-            new_identification_number: "NEW-ID-888".into(),
+            new_consumer_account_number: "NEWACCT999".into(),
+            new_identification_number: "NEWID888".into(),
             ..l1()
         }),
         n1: Some(N1Segment {
@@ -114,17 +127,17 @@ fn all_segments() {
             ..n1()
         }),
     };
-    assert_eq!(write(&[record], false), golden("all_segments"));
+    assert_eq!(write(&[record], false), expected("all_segments"));
 }
 
 fn statuses() -> Vec<DataRecord> {
     vec![
         DataRecord::new(BaseSegment {
-            consumer_account_number: "ACCT-001".into(),
+            consumer_account_number: "ACCT001".into(),
             ..base()
         }),
         DataRecord::new(BaseSegment {
-            consumer_account_number: "ACCT-002".into(),
+            consumer_account_number: "ACCT002".into(),
             account_status: AccountStatus::ChargeOff,
             amount_past_due: 1500,
             original_charge_off_amount: 1500,
@@ -133,7 +146,7 @@ fn statuses() -> Vec<DataRecord> {
             ..base()
         }),
         DataRecord::new(BaseSegment {
-            consumer_account_number: "ACCT-003".into(),
+            consumer_account_number: "ACCT003".into(),
             account_status: AccountStatus::DeleteAccount,
             ecoa_code: EcoaCode::Delete,
             compliance_condition_code: Some(ComplianceConditionCode::FcraDispute),
@@ -141,7 +154,7 @@ fn statuses() -> Vec<DataRecord> {
             ..base()
         }),
         DataRecord::new(BaseSegment {
-            consumer_account_number: "ACCT-004".into(),
+            consumer_account_number: "ACCT004".into(),
             account_status: AccountStatus::PaidOrClosed,
             payment_rating: Some(PaymentRating::Past30),
             date_closed: Some(date(2020, 6, 30)),
@@ -152,12 +165,12 @@ fn statuses() -> Vec<DataRecord> {
 
 #[test]
 fn statuses_rdw() {
-    assert_eq!(write(&statuses(), false), golden("statuses"));
+    assert_eq!(write(&statuses(), false), expected("statuses"));
 }
 
 #[test]
 fn statuses_newline() {
-    assert_eq!(write(&statuses(), true), golden("statuses_newline"));
+    assert_eq!(write(&statuses(), true), expected("statuses_newline"));
 }
 
 #[test]

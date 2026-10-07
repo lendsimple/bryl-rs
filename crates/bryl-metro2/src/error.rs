@@ -30,7 +30,7 @@ pub enum Error {
         /// Segment identifier, e.g. `K1`.
         segment: &'static str,
     },
-    /// A base segment breaks a Metro 2 rule; nothing was written for it.
+    /// A data record breaks a Metro 2 rule; nothing was written for it.
     #[error("account {account}: {}", violations.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
     Invalid {
         /// Consumer account number.

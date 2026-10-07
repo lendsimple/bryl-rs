@@ -91,7 +91,7 @@ def metro2_scenarios(metro2):
         values = dict(
             record_descriptor_word=426,
             identification_number="FURNISHER123",
-            consumer_account_number="ACCT-000001",
+            consumer_account_number="ACCT000001",
             portfolio_type="I",
             account_type="01",
             date_opened=datetime.date(2019, 6, 15),
@@ -181,8 +181,8 @@ def metro2_scenarios(metro2):
             ),
             l1_segment=metro2.L1Segment(
                 change_indicator=3,
-                new_consumer_account_number="NEW-ACCT-999",
-                new_identification_number="NEW-ID-888",
+                new_consumer_account_number="NEWACCT999",
+                new_identification_number="NEWID888",
             ),
             n1_segment=metro2.N1Segment(employer_name="ACME CORPORATION", occupation="SOFTWARE ENGINEER"),
         )
@@ -193,10 +193,10 @@ def metro2_scenarios(metro2):
             write(
                 fo,
                 [
-                    metro2.DataRecord(base=base(consumer_account_number="ACCT-001")),
+                    metro2.DataRecord(base=base(consumer_account_number="ACCT001")),
                     metro2.DataRecord(
                         base=base(
-                            consumer_account_number="ACCT-002",
+                            consumer_account_number="ACCT002",
                             account_status="97",
                             amount_past_due=1500,
                             original_charge_off_amount=1500,
@@ -206,7 +206,7 @@ def metro2_scenarios(metro2):
                     ),
                     metro2.DataRecord(
                         base=base(
-                            consumer_account_number="ACCT-003",
+                            consumer_account_number="ACCT003",
                             account_status="DA",
                             ecoa_code="Z",
                             compliance_condition_code="XB",
@@ -215,7 +215,7 @@ def metro2_scenarios(metro2):
                     ),
                     metro2.DataRecord(
                         base=base(
-                            consumer_account_number="ACCT-004",
+                            consumer_account_number="ACCT004",
                             account_status="13",
                             payment_rating="1",
                             date_closed=datetime.date(2020, 6, 30),

@@ -27,7 +27,7 @@ use crate::records::{HeaderRecord, TrailerRecord};
 ///     .build();
 /// let base = BaseSegment::builder()
 ///     .identification_number("FURNISHER123")
-///     .consumer_account_number("ACCT-001")
+///     .consumer_account_number("ACCT001")
 ///     .portfolio_type(PortfolioType::Installment)
 ///     .account_type(AccountType::Unsecured)
 ///     .date_opened(NaiveDate::from_ymd_opt(2019, 6, 15).unwrap())
@@ -61,7 +61,7 @@ pub struct Writer<W> {
 
 impl<W: Write> Writer<W> {
     /// Writes records back to back (the record descriptor word gives each
-    /// record's length), validating base segments.
+    /// record's length), validating each data record.
     pub fn new(out: W) -> Self {
         Self {
             out,
@@ -78,8 +78,8 @@ impl<W: Write> Writer<W> {
         self
     }
 
-    /// Whether to check each base segment with [`crate::BaseSegment::validate`]
-    /// before writing it (on by default).
+    /// Whether to check each data record with [`DataRecord::validate`] before
+    /// writing it (on by default).
     #[must_use]
     pub fn validate(mut self, validate: bool) -> Self {
         self.validate = validate;
@@ -134,17 +134,14 @@ impl<W: Write> FileWriter<'_, W> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Invalid`] if the base segment breaks a rule, or an
-    /// encoding or I/O error. Nothing is written for a rejected record.
+    /// Returns [`Error::Invalid`] if the record breaks a rule, or an encoding
+    /// or I/O error. Nothing is written for a rejected record.
     pub fn write(&mut self, record: &DataRecord) -> Result<(), Error> {
         if self.writer.validate {
-            record
-                .base
-                .validate()
-                .map_err(|violations| Error::Invalid {
-                    account: record.base.consumer_account_number.clone(),
-                    violations,
-                })?;
+            record.validate().map_err(|violations| Error::Invalid {
+                account: record.base.consumer_account_number.clone(),
+                violations,
+            })?;
         }
         let mut buf = Vec::with_capacity(record.len() + 1);
         record.encode_into(&self.cx(), &mut buf)?;

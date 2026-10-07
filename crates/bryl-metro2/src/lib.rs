@@ -18,9 +18,10 @@
 //! A base segment and its appended segments form a [`DataRecord`], whose
 //! length is written in the base segment's record descriptor word.
 //!
-//! Write files with [`Writer`], which validates base segments and computes
-//! the trailer. Read them with [`Reader`], or all at once with
-//! [`File::read`], and check them with [`File::validate`].
+//! Write files with [`Writer`], which validates each data record and computes
+//! the trailer. Read them with [`Reader`] (RDW-framed, newline-delimited or
+//! variable-blocked), or all at once with [`File::read`], and check them with
+//! [`File::validate`].
 //!
 //! This is a port of `lms-python`'s `common/metro2.py`. Intentional
 //! differences are listed in the repository's `DEVIATIONS.md`.
@@ -52,7 +53,7 @@ pub use records::{
     L1Segment, N1Segment, TrailerRecord,
 };
 pub use validate::{
-    Violation, is_valid_dob, is_valid_phone, is_valid_ssn, validate_amount_past_due,
+    CharClass, Violation, is_valid_dob, is_valid_phone, is_valid_ssn, validate_amount_past_due,
     validate_payment_history, validate_payment_rating,
 };
 pub use writer::{FileWriter, Writer};

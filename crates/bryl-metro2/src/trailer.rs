@@ -61,8 +61,11 @@ impl TrailerRecord {
     }
 
     /// Fills in the totals derived from the others: the "all segments" SSN
-    /// and DOB counts, and the block count (base records plus header and
-    /// trailer).
+    /// and DOB counts.
+    ///
+    /// The block count stays 0. It counts blocks "if applicable", and the
+    /// files this library writes are not blocked; the CRRG's fixed-length
+    /// example trailer reports 0.
     pub fn finalize(&mut self) {
         self.total_ssns_all_segments = self.total_ssns_base_segments
             + self.total_ssns_j1_segments
@@ -70,7 +73,6 @@ impl TrailerRecord {
         self.total_dobs_all_segments = self.total_dobs_base_segments
             + self.total_dobs_j1_segments
             + self.total_dobs_j2_segments;
-        self.block_count = self.total_base_records + 2;
     }
 
     fn count_contact(&mut self, telephone_number: u64, ecoa_code: EcoaCode) {

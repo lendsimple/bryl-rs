@@ -53,28 +53,34 @@ written by `nacha.py`; see `crates/bryl-nacha/tests/reader.rs`.
 
 ## metro2
 
-No deviation changes the bytes written for a record both libraries accept:
-`crates/bryl-metro2/tests/golden.rs` checks that files written by the Rust
-writer are byte-identical to `metro2.py`'s output for the same records. The
-differences are in what is accepted (most importantly the payment rating
-rule, M8) and in the API.
+Only one deviation changes the bytes written for a record both libraries
+accept: the trailer block count (M6). `crates/bryl-metro2/tests/golden.rs`
+applies it to `metro2.py`'s output and checks the rest is byte-identical. The
+other differences are in what is accepted (the payment rating rule M8, the
+character rules M17, the retired status M18) and in the API.
 
 | ID | Python | Rust | Effect |
 |----|--------|------|--------|
 | M2 | A required date set to `None` silently writes `00000000`. | Required dates are `NaiveDate`; only optional dates can be `None`. | Compile error instead of a zero date. |
 | M3 | Code tables are plain dicts that never validate fields. | Code fields are enums. | Unknown codes are rejected on write (by the type) and on read. |
 | M4 | The base segment's record descriptor word is overwritten on a copy when dumping a data record. | Same: `BaseSegment::record_descriptor_word` is read from files, and recomputed when writing a `DataRecord`. | None. (The plan proposed not storing it; it is kept so field offsets match the spec.) |
-| M6 | Trailer totals, including `block_count = base records + 2`. | Same, and moov-io computes it the same way (`len(f.Bases) + 2`). The CRRG field is "the number of blocks on the file, if applicable", which only differs for blocked files, and those are not supported (M12). | None. |
+| M6 | Trailer `block_count = base records + 2`. | The writer reports 0: the CRRG (2020) defines the field as the number of blocks "if applicable", and its fixed-length example trailer reports 0. Other totals are unchanged. `File::validate` checks the block count only for variable-blocked files. | Trailer positions 57–65 are `000000000` instead of records + 2. |
 | M7 | `validate_payment_rating`, `validate_amount_past_due` and `validate_payment_history` exist but the writer never calls them. | `Writer` checks each base segment with `BaseSegment::validate` (turn off with `Writer::validate(false)`). | Records breaking these rules are rejected instead of written. |
 | M8 | `PAYMENT_RATING_FOR_STATUS` requires a rating per delinquency status (e.g. `0` for 11, `1` for 71, `L` for 97) and allows anything for the others. | A rating (any of `0`–`6`, `G`, `L`) is required for statuses 05, 13, 65, 88, 89, 94 and 95, and must be blank for every other status (`AccountStatus::requires_payment_rating`). Three independent sources agree: moov-io/metro2's validator, Upstart's `metro_2` Ruby gem and The Mortgage Office's Metro 2 documentation. Not yet checked against the CRRG text itself. | With M7, records following Python's table are rejected: e.g. status 11 with rating `0`. Python never enforced its table, so files the LMS writes today may carry either form. |
 | M10 | Record type errors always report offset 0. | Errors carry the record's real byte offset (or line number in newline mode). | Better messages. |
-| M12 | Variable-blocked files (block descriptor words) are not supported. | Still not supported. moov-io treats block descriptor words as part of the packed (binary) format; its one character-format sample has a block descriptor word before the header only, so there is no consistent layout to implement without the CRRG text. | moov-io's `unpacked_variable_file.dat`, `header_record.dat` and `base_segment.dat` cannot be read. |
+| M12 | Variable-blocked files (block descriptor words) are not supported. | Read in both RDW and newline mode: a 4-digit block descriptor word (the block length, counting itself) followed by one or more RDW-prefixed records and optional blank padding, per the CRRG (2020). A file is treated as blocked only if its first unit is a block holding the header, so unblocked files are read exactly as before. `Reader::blocks` / `File::blocks` count the blocks, with a record outside a block counting as one (moov-io's sample blocks only the header). The writer does not write blocked files. | Blocked files can be read. moov-io's `header_record.dat` and `base_segment.dat` still cannot: they have a newline inside the block. |
 | M13 | `DataRecord.load` (unlike the reader) silently decodes a truncated segment; a repeated K1–N1 segment overwrites the earlier one. | A truncated segment is always an error; a repeated K1, K2, K3, K4, L1 or N1 is an error. | Malformed records are rejected. |
 | M14 | A data record longer than 9999 characters writes a 5-digit record descriptor word. | `Error::RecordTooLong`. | Rejected instead of written corrupt. |
 | M15 | The blank payment history code (`" "`) is an entry in `PaymentHistoryCodes`. | It is a space in `PaymentHistoryProfile`, not a `PaymentHistoryCode` variant (codes cannot be blank). | None. |
 | M16 | Several account status names are wrong: 61 `VOLUNTARY_SURRENDER`, 62 `MFR_COLLECTED`, 63 `MFR_NOT_COLLECTED`, 64 `FORECLOSURE`, 65 `VOLUNTARY_SURRENDER_ALT`, 88 `CLAIM_FILED`, 94 `GOVT_CLAIM_INSURED`, 95 `GOVT_CLAIM_GUARANTEED`, 96 `GOVT_CLAIM_ADJUSTMENT`, DF `DEFERRED`. | Named for what the codes mean: `PaidVoluntarySurrender`, `PaidCollection`, `PaidRepossession`, `PaidChargeOff`, `PaidForeclosureStarted`, `GovernmentClaimFiled`, `ForeclosureCompleted`, `VoluntarySurrender` (now 95, not 61), `Repossession`, `DeleteAccountFraud`. Each variant's docs give the full description. Sources: Oracle Financial Services Lending & Leasing and The Mortgage Office Metro 2 documentation, Upstart's `metro_2` Ruby gem. | None: codes are unchanged. |
+| M17 | Alphanumeric fields allow `string.printable`. | `DataRecord::validate` (and so the writer and `File::validate`) checks CRRG (2020) character rules. Consumer names (base, J1, J2): letters, spaces and hyphens. Address lines and city (base, J2): letters, digits, spaces, slashes, dashes and periods. Consumer account number, identification number, and the L1 replacements: letters and digits only. | Records with e.g. `O'BRIEN`, `APT #4`, `MAIN ST,` or `ACCT-001` are rejected on write (`Writer::validate(false)` turns all checks off). |
+| M18 | Account status 05 can be written. | Rejected on write: CDIA retired 05 in April 2022. Report the status at the time of transfer with special comment AT (internal transfer) or O (transferred to another company) instead. Files containing 05 can still be read. | Records with status 05 are rejected on write. |
 
-Sources for M6, M8 and M16: [moov-io/metro2](https://github.com/moov-io/metro2)
+Sources for M6, M12, M17 and M18: the CDIA Credit Reporting Resource Guide
+(2020 edition); [CDIA's announcement retiring status 05](https://www.cdiaonline.org/retirementaccountstatus05/).
+Check them against the current edition before relying on them.
+
+Sources for M8 and M16: [moov-io/metro2](https://github.com/moov-io/metro2)
 (`pkg/lib/base_segment.go` `ValidatePaymentRating`, `pkg/file/file_instance.go`);
 Upstart's [`metro_2` gem](https://github.com/teamupstart/metro_2)
 (`lib/metro_2.rb`); [The Mortgage Office](https://help.themortgageoffice.com/knowledge/account-status-codes);

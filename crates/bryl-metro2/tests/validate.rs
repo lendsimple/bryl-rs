@@ -257,9 +257,126 @@ mod base_segment {
     }
 
     #[test]
-    fn every_status_with_its_required_rating_is_valid() {
+    fn every_current_status_with_its_required_rating_is_valid() {
         for &status in AccountStatus::ALL {
-            assert_eq!(base_with_status(status).validate(), Ok(()), "{status:?}");
+            if status != AccountStatus::Transferred {
+                assert_eq!(base_with_status(status).validate(), Ok(()), "{status:?}");
+            }
         }
+    }
+
+    #[test]
+    fn status_05_is_retired() {
+        // M18: retired by CDIA in April 2022.
+        let err = base_with_status(AccountStatus::Transferred)
+            .validate()
+            .unwrap_err();
+        assert_eq!(
+            err,
+            [Violation::RetiredStatus {
+                status: AccountStatus::Transferred
+            }]
+        );
+        assert!(err[0].to_string().contains("special comment AT or O"));
+    }
+}
+
+mod characters {
+    //! M17: character rules from the CRRG's field descriptions.
+    use super::*;
+    use metro2::{CharClass, DataRecord, J1Segment, J2Segment, L1Segment};
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn classes() {
+        assert!("SMITH-JONES".chars().all(|c| CharClass::Name.allows(c)));
+        assert!("VAN DYKE".chars().all(|c| CharClass::Name.allows(c)));
+        for c in ['\'', '.', '1', ',', '&'] {
+            assert!(!CharClass::Name.allows(c), "{c:?}");
+        }
+        assert!(
+            "123 N. MAIN ST-B/2"
+                .chars()
+                .all(|c| CharClass::Address.allows(c))
+        );
+        for c in ['#', ',', '+', '&'] {
+            assert!(!CharClass::Address.allows(c), "{c:?}");
+        }
+        assert!(
+            "ACCT000001"
+                .chars()
+                .all(|c| CharClass::Identifier.allows(c))
+        );
+        for c in [' ', '-', '/'] {
+            assert!(!CharClass::Identifier.allows(c), "{c:?}");
+        }
+    }
+
+    #[test]
+    fn base_segment_fields() {
+        let b = BaseSegment {
+            surname: "O'BRIEN".into(),
+            first_line_of_address: "12 MAIN ST, APT 4".into(),
+            consumer_account_number: "ACCT 1".into(),
+            ..base()
+        };
+        let fields: Vec<_> = b
+            .validate()
+            .unwrap_err()
+            .into_iter()
+            .map(|v| match v {
+                Violation::Characters { field, ch, .. } => (field, ch),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            fields,
+            [
+                ("consumer_account_number".to_owned(), ' '),
+                ("surname".to_owned(), '\''),
+                ("first_line_of_address".to_owned(), ','),
+            ]
+        );
+    }
+
+    #[test]
+    fn message() {
+        let err = CharClass::Name.check("surname", "O'BRIEN").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "surname contains '\\'' at position 1; only letters, spaces and hyphens are allowed"
+        );
+    }
+
+    #[test]
+    fn segments_are_prefixed() {
+        let record = DataRecord {
+            j1: vec![J1Segment {
+                first_name: "ANN-MARIE".into(),
+                ..j1()
+            }],
+            j2: vec![
+                j2(),
+                J2Segment {
+                    city: "ST. LOUIS #2".into(),
+                    ..j2()
+                },
+            ],
+            l1: Some(L1Segment {
+                new_identification_number: "ID/7".into(),
+                ..l1()
+            }),
+            ..DataRecord::new(base())
+        };
+        let fields: Vec<_> = record
+            .validate()
+            .unwrap_err()
+            .into_iter()
+            .map(|v| match v {
+                Violation::Characters { field, .. } => field,
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(fields, ["j2[1].city", "l1.new_identification_number"]);
     }
 }
