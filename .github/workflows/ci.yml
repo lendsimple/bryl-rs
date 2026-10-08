@@ -89,6 +89,19 @@ jobs:
       - run: cargo +nightly update -Z direct-minimal-versions
       - run: cargo +stable test --workspace
 
+  package-tests:
+    name: Test (packaged crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package-tests
+      # The tests must pass from the published crates, as crater and Linux
+      # distributions run them.
+      - run: ./scripts/test-packaged-crates.sh
+
   fuzz:
     name: Fuzz (smoke test)
     runs-on: ubuntu-latest

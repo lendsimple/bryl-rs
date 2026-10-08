@@ -68,6 +68,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 - **Compile-error tests** (`crates/bryl/tests/ui`) match current stable rustc
   wording; regenerate with `TRYBUILD=overwrite cargo test -p bryl --test ui`.
+  They run only in the repository, where `.cargo/config.toml` sets
+  `BRYL_UI_TESTS`, and skip in the published crate.
+- **Packaged crates:** `scripts/test-packaged-crates.sh` packages the
+  workspace, unpacks it outside the repository and runs every crate's tests
+  there, as crater and Linux distributions do. CI runs it too.
 - **Snapshots** (`crates/*/tests/fixtures/snapshots`) hold the writers'
   output for fixed scenarios; `tests/snapshots.rs` compares against them
   byte for byte. After an intended change to written bytes, regenerate with
