@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["nacha", "ach", "banking", "fixed-width", "payments"]
 categories = ["encoding", "parser-implementations", "finance"]
-exclude = ["examples", "tests"]
+include = ["src/**", "tests/**", "examples/**", "README.md", "LICENSE"]
 
 [lib]
 name = "nacha"

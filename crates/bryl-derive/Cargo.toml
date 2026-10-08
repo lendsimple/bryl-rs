@@ -10,6 +10,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["fixed-width", "record", "derive"]
 categories = ["encoding"]
+include = ["src/**", "README.md", "LICENSE"]
 
 [lib]
 proc-macro = true
