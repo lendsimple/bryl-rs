@@ -10,7 +10,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Michael Lavers <kolanos@gmail.com>"]
@@ -18,9 +18,9 @@ license = "MIT"
 repository = "https://github.com/lendsimple/bryl-rs"
 
 [workspace.dependencies]
-bryl = { path = "crates/bryl", version = "0.1.0" }
-bryl-derive = { path = "crates/bryl-derive", version = "0.1.0" }
-bryl-pattern = { path = "crates/bryl-pattern", version = "0.1.0" }
+bryl = { path = "crates/bryl", version = "0.1.1" }
+bryl-derive = { path = "crates/bryl-derive", version = "0.1.1" }
+bryl-pattern = { path = "crates/bryl-pattern", version = "0.1.1" }
 bon = "3"
 chrono = { version = "0.4.23", default-features = false, features = ["alloc"] }
 thiserror = "2"

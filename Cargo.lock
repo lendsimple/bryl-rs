@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "bryl"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bryl-derive",
  "bryl-pattern",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "bryl-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bryl-pattern",
  "proc-macro2",
@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "bryl-metro2"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bon",
  "bryl",
@@ -100,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "bryl-nacha"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bon",
  "bryl",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "bryl-pattern"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "pretty_assertions",
  "thiserror",
