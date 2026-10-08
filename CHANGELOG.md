@@ -6,9 +6,15 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-08
+
 ### Changed
 
-- The published packages include their tests, test fixtures and examples.
+- The published packages include their tests, test fixtures and examples,
+  and the tests pass from the packages. The `bryl` compile-error snapshot
+  test, which follows one rustc's wording, skips outside the repository.
+- The `bryl-nacha` and `bryl-metro2` READMEs show crates.io and docs.rs
+  badges.
 
 ## [0.1.0] - 2026-10-07
 
@@ -65,5 +71,6 @@ First release.
 - Internal crates behind `bryl`'s derive macros and date/time patterns,
   re-exported through `bryl`.
 
-[Unreleased]: https://github.com/lendsimple/bryl-rs/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lendsimple/bryl-rs/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/lendsimple/bryl-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lendsimple/bryl-rs/releases/tag/v0.1.0
