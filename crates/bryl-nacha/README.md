@@ -1,5 +1,8 @@
 # bryl-nacha
 
+[![crates.io](https://img.shields.io/crates/v/bryl-nacha.svg)](https://crates.io/crates/bryl-nacha)
+[![docs.rs](https://img.shields.io/docsrs/bryl-nacha)](https://docs.rs/bryl-nacha)
+
 Write, read and validate NACHA ACH files (`use nacha::...`).
 
 ```rust

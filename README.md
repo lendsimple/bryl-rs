@@ -1,6 +1,8 @@
 # bryl-rs
 
 [![CI](https://github.com/lendsimple/bryl-rs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lendsimple/bryl-rs/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/bryl.svg)](https://crates.io/crates/bryl)
+[![docs.rs](https://img.shields.io/docsrs/bryl)](https://docs.rs/bryl)
 
 bryl is a Rust library for formatting fixed-width records: declare a
 record's typed fields once, then construct, write and read it. Format crates

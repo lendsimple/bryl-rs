@@ -1,5 +1,8 @@
 # bryl-metro2
 
+[![crates.io](https://img.shields.io/crates/v/bryl-metro2.svg)](https://crates.io/crates/bryl-metro2)
+[![docs.rs](https://img.shields.io/docsrs/bryl-metro2)](https://docs.rs/bryl-metro2)
+
 Write, read and validate Metro 2 credit reporting files, character format
 (`use metro2::...`).
 
