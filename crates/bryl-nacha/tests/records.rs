@@ -354,7 +354,7 @@ mod codes {
     fn code_table_sizes() {
         assert_eq!(ServiceClassCode::ALL.len(), 3);
         assert_eq!(StandardEntryClass::ALL.len(), 24);
-        assert_eq!(TransactionCode::ALL.len(), 12);
+        assert_eq!(TransactionCode::ALL.len(), 30);
     }
 
     #[test]
@@ -364,11 +364,20 @@ mod codes {
             ServiceClassCode::try_from(220),
             Ok(ServiceClassCode::CreditsOnly)
         );
-        assert!(TransactionCode::try_from(24).is_err());
+        assert_eq!(
+            TransactionCode::try_from(55),
+            Ok(TransactionCode::LoanDebit)
+        );
+        // Unassigned codes, including the loan debit prenote (58) and loan
+        // zero-dollar debit (59), which do not exist.
+        for code in [20, 25, 30, 35, 45, 57, 58, 59, 60] {
+            assert!(TransactionCode::try_from(code).is_err(), "{code}");
+        }
     }
 
     fn for_entry(amount: i64, account: AccountKind, ret: bool, prenote: bool) -> TransactionCode {
         TransactionCode::for_entry(amount, account, ret, prenote)
+            .unwrap_or_else(|| panic!("no code for {amount} {account:?} {ret} {prenote}"))
     }
 
     #[test]
@@ -440,10 +449,53 @@ mod codes {
     }
 
     #[test]
+    fn for_entry_general_ledger_and_loan() {
+        use AccountKind::{GeneralLedger, Loan};
+        assert_eq!(
+            for_entry(100, GeneralLedger, false, false),
+            TransactionCode::GeneralLedgerCredit
+        );
+        assert_eq!(
+            for_entry(-100, GeneralLedger, false, true),
+            TransactionCode::GeneralLedgerPrenoteDebit
+        );
+        assert_eq!(
+            for_entry(100, Loan, false, false),
+            TransactionCode::LoanCredit
+        );
+        assert_eq!(
+            for_entry(0, Loan, false, false),
+            TransactionCode::LoanPrenoteCredit
+        );
+        assert_eq!(
+            for_entry(-100, Loan, true, false),
+            TransactionCode::LoanReturnedDebit
+        );
+        // A loan debit (55) is for reversals only, but it is the code.
+        assert_eq!(
+            for_entry(-100, Loan, false, false),
+            TransactionCode::LoanDebit
+        );
+    }
+
+    #[test]
+    fn for_entry_has_no_loan_debit_prenote() {
+        assert_eq!(
+            TransactionCode::for_entry(-100, AccountKind::Loan, false, true),
+            None
+        );
+    }
+
+    #[test]
     fn for_entry_matches_code_arithmetic() {
         // Codes are 21/23/22 (return, prenote, credit), +5 for debits and
-        // +10 for savings accounts.
-        for account in [AccountKind::Checking, AccountKind::Savings] {
+        // +10 per account kind (checking, savings, general ledger). Loans
+        // differ; see `for_entry_general_ledger_and_loan`.
+        for account in [
+            AccountKind::Checking,
+            AccountKind::Savings,
+            AccountKind::GeneralLedger,
+        ] {
             for amount in [-5i64, 0, 5] {
                 for ret in [false, true] {
                     for prenote in [false, true] {
@@ -457,9 +509,11 @@ mod codes {
                         if amount < 0 {
                             expected += 5;
                         }
-                        if account == AccountKind::Savings {
-                            expected += 10;
-                        }
+                        expected += match account {
+                            AccountKind::Savings => 10,
+                            AccountKind::GeneralLedger => 20,
+                            _ => 0,
+                        };
                         assert_eq!(
                             for_entry(amount, account, ret, prenote).as_code(),
                             expected,
@@ -493,6 +547,95 @@ mod codes {
         assert!(TransactionCode::CheckingPrenoteDebit.is_prenote());
         assert!(TransactionCode::CheckingReturnedCredit.is_return());
         assert!(!TransactionCode::CheckingCredit.is_return());
+    }
+
+    /// Every code with its expected account kind and classification:
+    /// `(code, account, credit, debit, prenote, return, zero-dollar)`.
+    #[test]
+    fn classification_per_code() {
+        use AccountKind::{Checking, GeneralLedger, Loan, Savings};
+        use TransactionCode as T;
+        #[rustfmt::skip]
+        let table = [
+            (T::CheckingReturnedCredit, 21, Checking, true, false, false, true, false),
+            (T::CheckingCredit, 22, Checking, true, false, false, false, false),
+            (T::CheckingPrenoteCredit, 23, Checking, true, false, true, false, false),
+            (T::CheckingZeroDollarCredit, 24, Checking, true, false, false, false, true),
+            (T::CheckingReturnedDebit, 26, Checking, false, true, false, true, false),
+            (T::CheckingDebit, 27, Checking, false, true, false, false, false),
+            (T::CheckingPrenoteDebit, 28, Checking, false, true, true, false, false),
+            (T::CheckingZeroDollarDebit, 29, Checking, false, true, false, false, true),
+            (T::SavingsReturnedCredit, 31, Savings, true, false, false, true, false),
+            (T::SavingsCredit, 32, Savings, true, false, false, false, false),
+            (T::SavingsPrenoteCredit, 33, Savings, true, false, true, false, false),
+            (T::SavingsZeroDollarCredit, 34, Savings, true, false, false, false, true),
+            (T::SavingsReturnedDebit, 36, Savings, false, true, false, true, false),
+            (T::SavingsDebit, 37, Savings, false, true, false, false, false),
+            (T::SavingsPrenoteDebit, 38, Savings, false, true, true, false, false),
+            (T::SavingsZeroDollarDebit, 39, Savings, false, true, false, false, true),
+            (T::GeneralLedgerReturnedCredit, 41, GeneralLedger, true, false, false, true, false),
+            (T::GeneralLedgerCredit, 42, GeneralLedger, true, false, false, false, false),
+            (T::GeneralLedgerPrenoteCredit, 43, GeneralLedger, true, false, true, false, false),
+            (T::GeneralLedgerZeroDollarCredit, 44, GeneralLedger, true, false, false, false, true),
+            (T::GeneralLedgerReturnedDebit, 46, GeneralLedger, false, true, false, true, false),
+            (T::GeneralLedgerDebit, 47, GeneralLedger, false, true, false, false, false),
+            (T::GeneralLedgerPrenoteDebit, 48, GeneralLedger, false, true, true, false, false),
+            (T::GeneralLedgerZeroDollarDebit, 49, GeneralLedger, false, true, false, false, true),
+            (T::LoanReturnedCredit, 51, Loan, true, false, false, true, false),
+            (T::LoanCredit, 52, Loan, true, false, false, false, false),
+            (T::LoanPrenoteCredit, 53, Loan, true, false, true, false, false),
+            (T::LoanZeroDollarCredit, 54, Loan, true, false, false, false, true),
+            (T::LoanDebit, 55, Loan, false, true, false, false, false),
+            (T::LoanReturnedDebit, 56, Loan, false, true, false, true, false),
+        ];
+        assert_eq!(table.len(), T::ALL.len());
+        for (code, value, account, credit, debit, prenote, ret, zero) in table {
+            assert_eq!(code.as_code(), value, "{code:?}");
+            assert_eq!(code.account(), account, "{code:?}");
+            assert_eq!(code.is_credit(), credit, "{code:?}");
+            assert_eq!(code.is_debit(), debit, "{code:?}");
+            assert_eq!(code.is_prenote(), prenote, "{code:?}");
+            assert_eq!(code.is_return(), ret, "{code:?}");
+            assert_eq!(code.is_zero_dollar_remittance(), zero, "{code:?}");
+        }
+    }
+
+    #[test]
+    fn account_predicates_match_account() {
+        for code in TransactionCode::ALL.iter().copied() {
+            let account = code.account();
+            assert_eq!(code.is_checking(), account == AccountKind::Checking);
+            assert_eq!(code.is_savings(), account == AccountKind::Savings);
+            assert_eq!(
+                code.is_general_ledger(),
+                account == AccountKind::GeneralLedger
+            );
+            assert_eq!(code.is_loan(), account == AccountKind::Loan);
+        }
+    }
+
+    #[test]
+    fn zero_dollar_remittance_entry_classes() {
+        use StandardEntryClass as Sec;
+        use TransactionCode as T;
+        let zero_dollar: Vec<_> = T::ALL
+            .iter()
+            .copied()
+            .filter(|code| code.is_zero_dollar_remittance())
+            .collect();
+        assert_eq!(zero_dollar.len(), 7);
+        for &code in &zero_dollar {
+            assert!(Sec::Ccd.allows_zero_dollar_remittance(code), "{code:?}");
+            assert!(Sec::Ctx.allows_zero_dollar_remittance(code), "{code:?}");
+            assert!(!Sec::Ppd.allows_zero_dollar_remittance(code), "{code:?}");
+            let acknowledgment = matches!(
+                code,
+                T::CheckingZeroDollarCredit | T::SavingsZeroDollarCredit
+            );
+            assert_eq!(Sec::Ack.allows_zero_dollar_remittance(code), acknowledgment);
+            assert_eq!(Sec::Atx.allows_zero_dollar_remittance(code), acknowledgment);
+        }
+        assert!(!Sec::Ccd.allows_zero_dollar_remittance(T::CheckingCredit));
     }
 
     #[test]
