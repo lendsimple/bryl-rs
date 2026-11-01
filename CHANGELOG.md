@@ -6,6 +6,14 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the code enums of `bryl-nacha` (`TransactionCode`,
+  `ReturnReasonCode`, `StandardEntryClass`, `ServiceClassCode`) and
+  `bryl-metro2`, as well as `AccountKind` and `NachaRecord`, are
+  `#[non_exhaustive]`, so later releases can add codes and record types
+  without a breaking change. A `match` on them needs a wildcard arm.
+
 ## [0.1.1] - 2026-10-08
 
 ### Changed

@@ -334,6 +334,7 @@ pub struct FileControl {
 
 /// Any NACHA line.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NachaRecord {
     /// `1`
     FileHeader(FileHeader),

@@ -5,6 +5,7 @@ use bryl::Code;
 
 /// Portfolio type.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PortfolioType {
     /// `C`
     #[code("C")]
@@ -25,6 +26,7 @@ pub enum PortfolioType {
 
 /// Account type.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AccountType {
     /// `00`
     #[code("00")]
@@ -234,6 +236,7 @@ pub enum AccountType {
 /// and [The Mortgage Office](https://help.themortgageoffice.com/knowledge/account-status-codes),
 /// which agree with Upstart's [`metro_2`](https://github.com/teamupstart/metro_2) gem.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AccountStatus {
     /// `05`: account transferred to another office.
     ///
@@ -315,6 +318,7 @@ pub enum AccountStatus {
 
 /// Payment rating.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PaymentRating {
     /// `0`
     #[code("0")]
@@ -350,6 +354,7 @@ pub enum PaymentRating {
 /// The blank code (no history reported) is not a variant: it is a space in
 /// [`crate::PaymentHistoryProfile`], because codes cannot be blank.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PaymentHistoryCode {
     /// `0`
     #[code("0")]
@@ -403,6 +408,7 @@ pub enum PaymentHistoryCode {
 
 /// Equal Credit Opportunity Act (ECOA) code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum EcoaCode {
     /// `1`
     #[code("1")]
@@ -435,6 +441,7 @@ pub enum EcoaCode {
 
 /// Consumer information indicator (bankruptcy and similar).
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ConsumerInformationIndicator {
     /// `A`
     #[code("A")]
@@ -515,6 +522,7 @@ pub enum ConsumerInformationIndicator {
 
 /// Compliance condition code (disputes and closures).
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ComplianceConditionCode {
     /// `XA`
     #[code("XA")]
@@ -550,6 +558,7 @@ pub enum ComplianceConditionCode {
 
 /// Special comment code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SpecialComment {
     /// `B`
     #[code("B")]
@@ -708,6 +717,7 @@ pub enum SpecialComment {
 
 /// Terms frequency.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TermsFrequency {
     /// `D`
     #[code("D")]
@@ -746,6 +756,7 @@ pub enum TermsFrequency {
 
 /// Address indicator.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AddressIndicator {
     /// `C`
     #[code("C")]
@@ -778,6 +789,7 @@ pub enum AddressIndicator {
 
 /// Residence code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ResidenceCode {
     /// `O`
     #[code("O")]
@@ -789,6 +801,7 @@ pub enum ResidenceCode {
 
 /// Generation code (Jr., Sr., II, ...).
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GenerationCode {
     /// `J`
     #[code("J")]
@@ -824,6 +837,7 @@ pub enum GenerationCode {
 
 /// Interest type indicator.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum InterestTypeIndicator {
     /// `F`
     #[code("F")]
@@ -835,6 +849,7 @@ pub enum InterestTypeIndicator {
 
 /// K1 creditor classification.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CreditorClassification {
     /// `1`
     #[code(1)]
@@ -885,6 +900,7 @@ pub enum CreditorClassification {
 
 /// L1 change indicator.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ChangeIndicator {
     /// `1`
     #[code(1)]
@@ -899,6 +915,7 @@ pub enum ChangeIndicator {
 
 /// K2 purchased/sold indicator.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PurchasedIndicator {
     /// `1`
     #[code(1)]
@@ -913,6 +930,7 @@ pub enum PurchasedIndicator {
 
 /// K3 agency identifier.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AgencyIdentifier {
     /// `0`
     #[code(0)]
@@ -927,6 +945,7 @@ pub enum AgencyIdentifier {
 
 /// K4 specialized payment indicator.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SpecializedPaymentIndicator {
     /// `1`
     #[code(1)]
