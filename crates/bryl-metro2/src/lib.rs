@@ -161,6 +161,35 @@
 //! assert_eq!(transferred.validate(), Ok(()));
 //! ```
 //!
+//! The code tables ([`AccountStatus`], [`PaymentRating`], [`SpecialComment`]
+//! and the other code enums) are `#[non_exhaustive]`: minor releases may add
+//! codes, so a `match` on them needs a wildcard arm.
+//!
+//! ```
+//! use metro2::InterestTypeIndicator;
+//!
+//! fn describe(indicator: InterestTypeIndicator) -> &'static str {
+//!     match indicator {
+//!         InterestTypeIndicator::Fixed => "fixed",
+//!         _ => "other",
+//!     }
+//! }
+//! assert_eq!(describe(InterestTypeIndicator::Fixed), "fixed");
+//! ```
+//!
+//! Without the wildcard, a match naming every current code does not compile:
+//!
+//! ```compile_fail,E0004
+//! use metro2::InterestTypeIndicator;
+//!
+//! fn describe(indicator: InterestTypeIndicator) -> &'static str {
+//!     match indicator {
+//!         InterestTypeIndicator::Fixed => "fixed",
+//!         InterestTypeIndicator::Variable => "variable",
+//!     }
+//! }
+//! ```
+//!
 //! # Rules the writer enforces
 //!
 //! [`FileWriter::write`] checks each record with [`DataRecord::validate`]

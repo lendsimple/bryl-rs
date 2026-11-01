@@ -107,6 +107,47 @@
 //! Prenotes (zero-dollar test entries that verify an account before the
 //! first real entry) must have a zero amount. Some banks do not accept them.
 //!
+//! The code tables ([`TransactionCode`], [`ReturnReasonCode`],
+//! [`StandardEntryClass`], [`ServiceClassCode`]), [`AccountKind`] and
+//! [`NachaRecord`] are `#[non_exhaustive]`: minor releases may add codes, so
+//! a `match` on them needs a wildcard arm.
+//!
+//! ```
+//! use nacha::TransactionCode;
+//!
+//! fn describe(code: TransactionCode) -> &'static str {
+//!     match code {
+//!         TransactionCode::CheckingCredit | TransactionCode::SavingsCredit => "credit",
+//!         TransactionCode::CheckingDebit | TransactionCode::SavingsDebit => "debit",
+//!         _ => "other",
+//!     }
+//! }
+//! assert_eq!(describe(TransactionCode::SavingsDebit), "debit");
+//! ```
+//!
+//! Without the wildcard, a match naming every current code does not compile:
+//!
+//! ```compile_fail,E0004
+//! use nacha::TransactionCode;
+//!
+//! fn describe(code: TransactionCode) -> &'static str {
+//!     match code {
+//!         TransactionCode::CheckingReturnedCredit
+//!         | TransactionCode::CheckingCredit
+//!         | TransactionCode::CheckingPrenoteCredit
+//!         | TransactionCode::SavingsReturnedCredit
+//!         | TransactionCode::SavingsCredit
+//!         | TransactionCode::SavingsPrenoteCredit => "credit",
+//!         TransactionCode::CheckingReturnedDebit
+//!         | TransactionCode::CheckingDebit
+//!         | TransactionCode::CheckingPrenoteDebit
+//!         | TransactionCode::SavingsReturnedDebit
+//!         | TransactionCode::SavingsDebit
+//!         | TransactionCode::SavingsPrenoteDebit => "debit",
+//!     }
+//! }
+//! ```
+//!
 //! # Rules the writer enforces
 //!
 //! [`BatchWriter::entry`] checks each entry and [`FileWriter::begin_batch`]

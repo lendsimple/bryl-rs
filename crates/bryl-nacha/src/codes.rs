@@ -4,6 +4,7 @@ use bryl::Code;
 
 /// Batch service class code: which kinds of entries a batch may contain.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ServiceClassCode {
     /// `200`: debits and credits.
     #[code(200)]
@@ -29,6 +30,7 @@ impl ServiceClassCode {
 
 /// Standard entry class (SEC) code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum StandardEntryClass {
     /// Accounts receivable entry.
     #[code("ARC")]
@@ -179,6 +181,7 @@ pub const REVERSAL: &str = "REVERSAL";
 
 /// Entry detail transaction code.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TransactionCode {
     /// `21`: return or notification of change for a checking credit.
     #[code(21)]
@@ -225,6 +228,7 @@ pub enum TransactionCode {
 /// a different addendum layout and international returns (R80–R85) need IAT,
 /// so neither is supported; reading a file that contains them fails.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ReturnReasonCode {
     /// `R01`: Insufficient funds.
     #[code("R01")]
@@ -397,6 +401,7 @@ impl ReturnReasonCode {
 
 /// Kind of receiving account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AccountKind {
     /// Checking (demand deposit) account.
     Checking,
