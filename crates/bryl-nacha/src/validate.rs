@@ -72,6 +72,30 @@ pub enum IssueKind {
         /// The amount.
         amount: u64,
     },
+    /// A zero-dollar remittance entry has a non-zero amount.
+    #[error("zero-dollar remittance amount must be 0, got {amount}")]
+    ZeroDollarAmount {
+        /// The amount.
+        amount: u64,
+    },
+    /// The batch's SEC code does not allow the zero-dollar remittance code
+    /// (see [`StandardEntryClass::allows_zero_dollar_remittance`]).
+    #[error(
+        "zero-dollar remittance code {transaction_code} is not allowed in a {standard_entry_class} batch"
+    )]
+    ZeroDollarEntryClass {
+        /// Batch SEC code.
+        standard_entry_class: StandardEntryClass,
+        /// Entry transaction code.
+        transaction_code: TransactionCode,
+    },
+    /// A zero-dollar remittance entry has no addendum to carry its
+    /// remittance data.
+    #[error("zero-dollar remittance entries need at least one addendum")]
+    ZeroDollarAddenda,
+    /// A loan debit (55) outside a reversal batch.
+    #[error("loan debits (55) are allowed only in a reversal batch")]
+    LoanDebitNotReversal,
     /// More addenda than the entry class allows.
     #[error("{standard_entry_class} entries allow at most {max} addenda, got {count}")]
     TooManyAddenda {
@@ -237,6 +261,12 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
             amount: detail.amount,
         });
     }
+    if code.is_zero_dollar_remittance() {
+        zero_dollar_issues(sec, entry, &mut issues);
+    }
+    if code == TransactionCode::LoanDebit && !reversal {
+        issues.push(IssueKind::LoanDebitNotReversal);
+    }
     // Notifications of change (COR) also use return transaction codes, but
     // carry type-98 addenda, which are not supported.
     if code.is_return() && sec != StandardEntryClass::Cor {
@@ -295,6 +325,26 @@ fn return_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
         issues.push(IssueKind::DateOfDeath {
             return_reason_code: code,
         });
+    }
+}
+
+/// A zero-dollar remittance entry moves no money, carries its remittance
+/// data in type-05 addenda, and is allowed only by some entry classes.
+fn zero_dollar_issues(sec: StandardEntryClass, entry: &Entry, issues: &mut Vec<IssueKind>) {
+    let code = entry.detail.transaction_code;
+    if entry.detail.amount != 0 {
+        issues.push(IssueKind::ZeroDollarAmount {
+            amount: entry.detail.amount,
+        });
+    }
+    if !sec.allows_zero_dollar_remittance(code) {
+        issues.push(IssueKind::ZeroDollarEntryClass {
+            standard_entry_class: sec,
+            transaction_code: code,
+        });
+    }
+    if entry.addenda.is_empty() {
+        issues.push(IssueKind::ZeroDollarAddenda);
     }
 }
 

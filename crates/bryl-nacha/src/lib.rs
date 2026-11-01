@@ -179,6 +179,12 @@
 //! - **Entry descriptions.** ENR batches must be described `AUTOENROLL` and
 //!   RCK batches `REDEPCHECK`.
 //! - **Prenotes** have a zero amount.
+//! - **Zero-dollar remittance** entries (24, 29, 34, 39, 44, 49, 54) have a
+//!   zero amount and at least one addendum, and appear only in CCD and CTX
+//!   batches, or ACK and ATX batches for 24 and 34; see
+//!   [`StandardEntryClass::allows_zero_dollar_remittance`].
+//! - **Loan debits** ([`TransactionCode::LoanDebit`], 55) appear only in a
+//!   reversal batch.
 //! - **Returns.** A return entry (transaction code x1 or x6) carries exactly
 //!   one [`ReturnAddendum`] whose trace number is its own, and no other
 //!   addenda; only R14 and R15 returns may give a date of death.

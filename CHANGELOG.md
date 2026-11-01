@@ -8,12 +8,28 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-nacha` transaction codes for general ledger (41–44, 46–49) and loan
+  (51–56) accounts, and the zero-dollar remittance codes (24, 29, 34, 39, 44,
+  49, 54), following moov-io/ach. `AccountKind` gains `GeneralLedger` and
+  `Loan`; `TransactionCode` gains `is_general_ledger`, `is_loan` and
+  `is_zero_dollar_remittance`; and
+  `StandardEntryClass::allows_zero_dollar_remittance` says which classes may
+  carry them.
+- The writer and `File::validate` enforce the rules for the new codes:
+  zero-dollar remittance entries have a zero amount and an addendum and
+  appear only in CCD, CTX, ACK and ATX batches, and loan debits (55) appear
+  only in reversal batches.
 - `bryl-nacha` has a `clock` feature, on by default, for `FileParams::now()`.
   Without it the crates build for targets without a system clock, such as
   `wasm32-unknown-unknown`, which CI now checks.
 
 ### Changed
 
+- **Breaking:** `TransactionCode::for_entry` returns `Option`: there is no
+  loan debit prenote.
+- `TransactionCode::is_credit` covers x1–x4 and `is_debit` x5–x9, so
+  zero-dollar remittance codes and the loan debit count toward service
+  class checks and control totals.
 - **Breaking:** the code enums of `bryl-nacha` (`TransactionCode`,
   `ReturnReasonCode`, `StandardEntryClass`, `ServiceClassCode`) and
   `bryl-metro2`, as well as `AccountKind` and `NachaRecord`, are

@@ -322,6 +322,42 @@ mod totals {
             assert_eq!(read(&output).validate(), []);
         }
     }
+
+    #[test]
+    fn general_ledger_loan_and_zero_dollar_totals() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(BatchParams {
+                standard_entry_class: StandardEntryClass::Ccd,
+                company_entry_description: nacha::REVERSAL.into(),
+                ..batch_params(ServiceClassCode::MixedDebitsAndCredits)
+            })
+            .unwrap();
+        for (code, amount, addenda) in [
+            (TransactionCode::LoanCredit, 10_000, &[][..]),
+            (TransactionCode::LoanDebit, 2_500, &[]),
+            (TransactionCode::GeneralLedgerDebit, 700, &[]),
+            (
+                TransactionCode::CheckingZeroDollarCredit,
+                0,
+                &["REMITTANCE"],
+            ),
+        ] {
+            batch.entry(entry_params(code, amount, addenda)).unwrap();
+        }
+        let control = batch.finish().unwrap();
+        file.finish().unwrap();
+
+        assert_eq!(control.total_credit_amount, 10_000);
+        // The loan debit (55) counts as a debit.
+        assert_eq!(control.total_debit_amount, 3_200);
+        // Four entries plus the zero-dollar entry's addendum.
+        assert_eq!(control.entry_addenda_count, 5);
+        assert_eq!(control.entry_hash, u64::from(routing().trn()) * 4);
+        let file = File::read(writer.get_ref().as_slice()).unwrap();
+        assert_eq!(file.validate(), []);
+    }
 }
 
 mod blocks {
@@ -637,6 +673,114 @@ mod rules {
         drop(file);
         let output = String::from_utf8(writer.into_inner()).unwrap();
         assert_eq!(output.lines().count(), 1);
+    }
+
+    #[test]
+    fn zero_dollar_remittance_needs_a_zero_amount() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Ccd,
+            entry_params(
+                TransactionCode::CheckingZeroDollarCredit,
+                100,
+                &["REMITTANCE"],
+            ),
+        );
+        assert_eq!(kind, IssueKind::ZeroDollarAmount { amount: 100 });
+    }
+
+    #[test]
+    fn zero_dollar_remittance_needs_an_addendum() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Ccd,
+            entry_params(TransactionCode::GeneralLedgerZeroDollarDebit, 0, &[]),
+        );
+        assert_eq!(kind, IssueKind::ZeroDollarAddenda);
+    }
+
+    #[test]
+    fn zero_dollar_remittance_only_in_ccd_ctx_ack_and_atx() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Ppd,
+            entry_params(
+                TransactionCode::CheckingZeroDollarCredit,
+                0,
+                &["REMITTANCE"],
+            ),
+        );
+        assert_eq!(
+            kind,
+            IssueKind::ZeroDollarEntryClass {
+                standard_entry_class: StandardEntryClass::Ppd,
+                transaction_code: TransactionCode::CheckingZeroDollarCredit,
+            }
+        );
+        // ACK and ATX allow only the checking and savings credits.
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Ack,
+            entry_params(
+                TransactionCode::GeneralLedgerZeroDollarCredit,
+                0,
+                &["REMITTANCE"],
+            ),
+        );
+        assert!(matches!(kind, IssueKind::ZeroDollarEntryClass { .. }));
+        for sec in [StandardEntryClass::Ack, StandardEntryClass::Ccd] {
+            let (result, _) = try_entry(
+                ServiceClassCode::MixedDebitsAndCredits,
+                sec,
+                entry_params(
+                    TransactionCode::CheckingZeroDollarCredit,
+                    0,
+                    &["REMITTANCE"],
+                ),
+            );
+            assert!(result.is_ok(), "{sec}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn loan_debits_only_in_reversal_batches() {
+        let kind = rejected(
+            ServiceClassCode::MixedDebitsAndCredits,
+            StandardEntryClass::Ppd,
+            entry_params(TransactionCode::LoanDebit, 100, &[]),
+        );
+        assert_eq!(kind, IssueKind::LoanDebitNotReversal);
+
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(BatchParams {
+                company_entry_description: nacha::REVERSAL.into(),
+                ..batch_params(ServiceClassCode::DebitsOnly)
+            })
+            .unwrap();
+        batch
+            .entry(entry_params(TransactionCode::LoanDebit, 100, &[]))
+            .unwrap();
+        batch.finish().unwrap();
+        file.finish().unwrap();
+        let file = File::read(writer.get_ref().as_slice()).unwrap();
+        assert_eq!(file.validate(), []);
+    }
+
+    #[test]
+    fn general_ledger_and_loan_prenotes_have_zero_amounts() {
+        for code in [
+            TransactionCode::GeneralLedgerPrenoteDebit,
+            TransactionCode::LoanPrenoteCredit,
+        ] {
+            let kind = rejected(
+                ServiceClassCode::MixedDebitsAndCredits,
+                StandardEntryClass::Ppd,
+                entry_params(code, 100, &[]),
+            );
+            assert_eq!(kind, IssueKind::PrenoteAmount { amount: 100 }, "{code:?}");
+        }
     }
 }
 
