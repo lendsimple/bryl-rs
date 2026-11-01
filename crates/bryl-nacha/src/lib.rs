@@ -314,6 +314,11 @@
 //!
 //! Reading accepts both LF and CRLF.
 //!
+//! The `clock` feature, on by default, provides [`FileParams::now()`], which
+//! reads the system clock. For targets without one, such as
+//! `wasm32-unknown-unknown`, turn it off (`default-features = false`) and set
+//! [`FileParams::created_at`] yourself.
+//!
 //! # Bank differences
 //!
 //! NACHA leaves some details to the bank receiving the file. Check its file

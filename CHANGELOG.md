@@ -6,6 +6,12 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- `bryl-nacha` has a `clock` feature, on by default, for `FileParams::now()`.
+  Without it the crates build for targets without a system clock, such as
+  `wasm32-unknown-unknown`, which CI now checks.
+
 ### Changed
 
 - **Breaking:** the code enums of `bryl-nacha` (`TransactionCode`,
