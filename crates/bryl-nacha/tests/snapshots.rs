@@ -9,7 +9,8 @@ mod common;
 use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    BatchParams, ReturnParams, ReturnReasonCode, ServiceClassCode, TransactionCode, Writer,
+    BatchParams, ReturnParams, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
+    TransactionCode, Writer,
 };
 use pretty_assertions::assert_eq;
 
@@ -148,6 +149,66 @@ fn returns() {
 }
 
 #[test]
+fn loan_and_gl_entries() {
+    let output = write(|file| {
+        // Loan disbursement, a loan prenote and GL movements.
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::MixedDebitsAndCredits))
+            .unwrap();
+        for (name, amount, code) in [
+            ("JANE SMITH", 250_000, TransactionCode::LoanCredit),
+            ("JOHN DOE", 0, TransactionCode::LoanPrenoteCredit),
+            (
+                "ACME OPERATING",
+                12_000,
+                TransactionCode::GeneralLedgerCredit,
+            ),
+            ("ACME RESERVE", 12_000, TransactionCode::GeneralLedgerDebit),
+        ] {
+            batch.entry(named(name, amount, code, &[])).unwrap();
+        }
+        batch.finish().unwrap();
+
+        // Reversing a loan credit sent in error: loan debits (55) are for
+        // reversals only.
+        let mut batch = file
+            .begin_batch(BatchParams {
+                company_entry_description: nacha::REVERSAL.into(),
+                ..batch_params(ServiceClassCode::DebitsOnly)
+            })
+            .unwrap();
+        batch
+            .entry(named(
+                "JANE SMITH",
+                250_000,
+                TransactionCode::LoanDebit,
+                &[],
+            ))
+            .unwrap();
+        batch.finish().unwrap();
+
+        // Remittance data without money moving.
+        let mut batch = file
+            .begin_batch(BatchParams {
+                standard_entry_class: StandardEntryClass::Ccd,
+                company_entry_description: "REMITTANCE".into(),
+                ..batch_params(ServiceClassCode::CreditsOnly)
+            })
+            .unwrap();
+        batch
+            .entry(named(
+                "ACME SUPPLIER",
+                0,
+                TransactionCode::CheckingZeroDollarCredit,
+                &["RMR*IV*INV0001*PI*1500.00\\"],
+            ))
+            .unwrap();
+        batch.finish().unwrap();
+    });
+    assert_snapshot("loan_and_gl_entries.ach", &output);
+}
+
+#[test]
 fn snapshots_read_back_and_validate() {
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         return; // the snapshots are being rewritten by the other tests
@@ -157,6 +218,7 @@ fn snapshots_read_back_and_validate() {
         "entries_with_addenda",
         "two_batches",
         "returns",
+        "loan_and_gl_entries",
     ] {
         let file = nacha::File::read(read_snapshot(&format!("{name}.ach")).as_bytes()).unwrap();
         assert_eq!(file.validate(), [], "{name}");

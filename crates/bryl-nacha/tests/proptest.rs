@@ -59,6 +59,11 @@ fn entry(
         .filter(|&code| service_class.allows(code))
         .filter(|&code| !(sec.debits_only() && code.is_credit()))
         .filter(|&code| !(sec.credits_only() && code.is_debit()))
+        // Loan debits need a reversal batch, which these batches are not.
+        .filter(|&code| code != TransactionCode::LoanDebit)
+        .filter(|&code| {
+            !code.is_zero_dollar_remittance() || sec.allows_zero_dollar_remittance(code)
+        })
         .collect();
     (
         proptest::sample::select(codes),
@@ -72,17 +77,21 @@ fn entry(
     )
         .prop_map(
             |(code, routing, account, amount, id, name, addenda, returned)| {
-                // Returns carry only their return addendum.
+                // Returns carry only their return addendum, and zero-dollar
+                // remittance entries need one addendum for their data.
                 let (addenda, returned) = if code.is_return() {
                     (Vec::new(), Some(returned))
+                } else if code.is_zero_dollar_remittance() && addenda.is_empty() {
+                    (vec!["REMITTANCE".to_owned()], None)
                 } else {
                     (addenda, None)
                 };
+                let zero_amount = code.is_prenote() || code.is_zero_dollar_remittance();
                 EntryParams::builder()
                     .transaction_code(code)
                     .receiving_dfi(routing.parse().unwrap())
                     .account_number(account)
-                    .amount(if code.is_prenote() { 0 } else { amount })
+                    .amount(if zero_amount { 0 } else { amount })
                     .individual_id(id)
                     .individual_name(name)
                     .addenda(addenda)
