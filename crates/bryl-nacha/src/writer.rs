@@ -4,7 +4,7 @@ use std::io::Write;
 
 use bon::Builder;
 use bryl::{EncodeCx, Record, Sanitize};
-use chrono::{NaiveDate, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime};
 
 use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
 use crate::entry::Entry;
@@ -149,10 +149,13 @@ pub struct FileParams {
     pub reference_code: String,
 }
 
+#[cfg(feature = "clock")]
 impl FileParams {
     /// The current UTC time, for [`FileParams::created_at`].
+    ///
+    /// Requires the `clock` feature (on by default).
     pub fn now() -> NaiveDateTime {
-        Utc::now().naive_utc()
+        chrono::Utc::now().naive_utc()
     }
 }
 

@@ -18,12 +18,21 @@ name = "nacha"
 [dependencies]
 bon.workspace = true
 bryl.workspace = true
-chrono = { workspace = true, features = ["clock"] }
+chrono.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 proptest.workspace = true
+
+[features]
+default = ["clock"]
+# `FileParams::now()`, which reads the system clock.
+clock = ["chrono/clock"]
+
+[[example]]
+name = "write_sample"
+required-features = ["clock"]
 
 [lints]
 workspace = true

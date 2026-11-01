@@ -54,6 +54,27 @@ jobs:
       # crates/bryl/tests/ui match current stable rustc wording; regenerate
       # them with TRYBUILD=overwrite when a new release changes it.
       - run: cargo test --workspace
+      # Nothing but `FileParams::now()` may need chrono's clock.
+      - run: cargo test -p bryl-nacha --no-default-features
+
+  wasm:
+    name: Check (wasm32-unknown-unknown)
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+      # The crates must build for targets without a system clock, such as a
+      # WebAssembly plugin host.
+      - run: >-
+          cargo check --target wasm32-unknown-unknown
+          -p bryl -p bryl-metro2 -p bryl-nacha --no-default-features
 
   msrv:
     name: Test (MSRV 1.85)
