@@ -63,7 +63,10 @@
 //! )?;
 //! let entry = batch.entry(
 //!     EntryParams::builder()
-//!         .transaction_code(TransactionCode::for_entry(-12_500, AccountKind::Checking, false, false))
+//!         .transaction_code(
+//!             TransactionCode::for_entry(-12_500, AccountKind::Checking, false, false)
+//!                 .ok_or("no transaction code")?,
+//!         )
 //!         .receiving_dfi("021000021".parse()?)
 //!         .account_number("000123456789")
 //!         .amount(12_500) // cents
@@ -90,22 +93,31 @@
 //!
 //! # Choosing transaction codes
 //!
-//! A [`TransactionCode`] combines the account type (checking or savings) with
-//! the direction and purpose of the entry. [`TransactionCode::for_entry`]
-//! picks one from a signed amount: negative amounts are debits, positive
-//! amounts credits, and a zero amount (or `is_prenote`) a prenote.
+//! A [`TransactionCode`] combines the receiving account kind (checking,
+//! savings, general ledger or loan; see [`AccountKind`]) with the direction
+//! and purpose of the entry. [`TransactionCode::for_entry`] picks one from a
+//! signed amount: negative amounts are debits, positive amounts credits, and
+//! a zero amount (or `is_prenote`) a prenote. It returns `None` for a loan
+//! debit prenote, which does not exist.
 //!
 //! ```
 //! use nacha::{AccountKind, TransactionCode};
 //!
-//! assert_eq!(TransactionCode::for_entry(5_000, AccountKind::Savings, false, false), TransactionCode::SavingsCredit);
-//! assert_eq!(TransactionCode::for_entry(-5_000, AccountKind::Checking, false, false), TransactionCode::CheckingDebit);
-//! assert_eq!(TransactionCode::for_entry(0, AccountKind::Checking, false, false), TransactionCode::CheckingPrenoteCredit);
+//! let code = |amount, account| TransactionCode::for_entry(amount, account, false, false);
+//! assert_eq!(code(5_000, AccountKind::Savings), Some(TransactionCode::SavingsCredit));
+//! assert_eq!(code(-5_000, AccountKind::Checking), Some(TransactionCode::CheckingDebit));
+//! assert_eq!(code(0, AccountKind::Checking), Some(TransactionCode::CheckingPrenoteCredit));
+//! // Disbursing a loan by crediting the borrower's loan account at another bank.
+//! assert_eq!(code(250_000, AccountKind::Loan), Some(TransactionCode::LoanCredit));
+//! assert_eq!(TransactionCode::for_entry(-5_000, AccountKind::Loan, false, true), None);
 //! assert!(TransactionCode::CheckingPrenoteDebit.is_prenote());
 //! ```
 //!
 //! Prenotes (zero-dollar test entries that verify an account before the
 //! first real entry) must have a zero amount. Some banks do not accept them.
+//! A loan debit ([`TransactionCode::LoanDebit`], 55) is allowed only in a
+//! reversal batch. Zero-dollar remittance codes (24, 29, 34, 39, 44, 49, 54)
+//! carry remittance data in their addenda; `for_entry` never picks them.
 //!
 //! The code tables ([`TransactionCode`], [`ReturnReasonCode`],
 //! [`StandardEntryClass`], [`ServiceClassCode`]), [`AccountKind`] and

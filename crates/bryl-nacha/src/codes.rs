@@ -174,12 +174,36 @@ impl StandardEntryClass {
             _ => None,
         }
     }
+
+    /// True if entries of this class may use the zero-dollar remittance
+    /// `code`: any of them for CCD and CTX, only the checking and savings
+    /// credits (24, 34) for ACK and ATX, and none for other classes
+    /// (moov-io/ach). False if `code` is not a zero-dollar remittance code.
+    pub const fn allows_zero_dollar_remittance(self, code: TransactionCode) -> bool {
+        if !code.is_zero_dollar_remittance() {
+            return false;
+        }
+        match self {
+            Self::Ccd | Self::Ctx => true,
+            Self::Ack | Self::Atx => matches!(
+                code,
+                TransactionCode::CheckingZeroDollarCredit
+                    | TransactionCode::SavingsZeroDollarCredit
+            ),
+            _ => false,
+        }
+    }
 }
 
 /// Company entry description that marks a reversal batch.
 pub const REVERSAL: &str = "REVERSAL";
 
-/// Entry detail transaction code.
+/// Entry detail transaction code: the receiving account kind (checking 2x,
+/// savings 3x, general ledger 4x, loan 5x) and the entry's direction and
+/// purpose (moov-io/ach).
+///
+/// Loan accounts have no debit prenote and no zero-dollar debit, and a loan
+/// debit (`55`) is allowed only in a reversal batch.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TransactionCode {
@@ -192,6 +216,9 @@ pub enum TransactionCode {
     /// `23`: checking credit prenote.
     #[code(23)]
     CheckingPrenoteCredit,
+    /// `24`: checking zero-dollar credit carrying remittance data.
+    #[code(24)]
+    CheckingZeroDollarCredit,
     /// `26`: return or notification of change for a checking debit.
     #[code(26)]
     CheckingReturnedDebit,
@@ -201,6 +228,9 @@ pub enum TransactionCode {
     /// `28`: checking debit prenote.
     #[code(28)]
     CheckingPrenoteDebit,
+    /// `29`: checking zero-dollar debit carrying remittance data.
+    #[code(29)]
+    CheckingZeroDollarDebit,
     /// `31`: return or notification of change for a savings credit.
     #[code(31)]
     SavingsReturnedCredit,
@@ -210,6 +240,9 @@ pub enum TransactionCode {
     /// `33`: savings credit prenote.
     #[code(33)]
     SavingsPrenoteCredit,
+    /// `34`: savings zero-dollar credit carrying remittance data.
+    #[code(34)]
+    SavingsZeroDollarCredit,
     /// `36`: return or notification of change for a savings debit.
     #[code(36)]
     SavingsReturnedDebit,
@@ -219,6 +252,51 @@ pub enum TransactionCode {
     /// `38`: savings debit prenote.
     #[code(38)]
     SavingsPrenoteDebit,
+    /// `39`: savings zero-dollar debit carrying remittance data.
+    #[code(39)]
+    SavingsZeroDollarDebit,
+    /// `41`: return or notification of change for a general ledger (GL) credit.
+    #[code(41)]
+    GeneralLedgerReturnedCredit,
+    /// `42`: general ledger (GL) credit.
+    #[code(42)]
+    GeneralLedgerCredit,
+    /// `43`: general ledger (GL) credit prenote.
+    #[code(43)]
+    GeneralLedgerPrenoteCredit,
+    /// `44`: general ledger (GL) zero-dollar credit carrying remittance data.
+    #[code(44)]
+    GeneralLedgerZeroDollarCredit,
+    /// `46`: return or notification of change for a general ledger (GL) debit.
+    #[code(46)]
+    GeneralLedgerReturnedDebit,
+    /// `47`: general ledger (GL) debit.
+    #[code(47)]
+    GeneralLedgerDebit,
+    /// `48`: general ledger (GL) debit prenote.
+    #[code(48)]
+    GeneralLedgerPrenoteDebit,
+    /// `49`: general ledger (GL) zero-dollar debit carrying remittance data.
+    #[code(49)]
+    GeneralLedgerZeroDollarDebit,
+    /// `51`: return or notification of change for a loan credit.
+    #[code(51)]
+    LoanReturnedCredit,
+    /// `52`: loan credit.
+    #[code(52)]
+    LoanCredit,
+    /// `53`: loan credit prenote.
+    #[code(53)]
+    LoanPrenoteCredit,
+    /// `54`: loan zero-dollar credit carrying remittance data.
+    #[code(54)]
+    LoanZeroDollarCredit,
+    /// `55`: loan debit (reversals only).
+    #[code(55)]
+    LoanDebit,
+    /// `56`: return or notification of change for a loan debit.
+    #[code(56)]
+    LoanReturnedDebit,
 }
 
 /// Return reason code, carried by a [`ReturnAddendum`](crate::ReturnAddendum).
@@ -407,21 +485,30 @@ pub enum AccountKind {
     Checking,
     /// Savings account.
     Savings,
+    /// General ledger (GL) account.
+    GeneralLedger,
+    /// Loan account.
+    Loan,
 }
 
 impl TransactionCode {
     /// Picks the transaction code for an entry: returns use the "returned"
     /// code, prenotes and zero amounts use the prenote code, negative amounts
     /// are debits and positive amounts credits.
+    ///
+    /// Returns `None` for a loan debit prenote, which does not exist. A
+    /// negative amount to a loan account gives [`TransactionCode::LoanDebit`],
+    /// which is allowed only in a reversal batch. Zero-dollar remittance codes
+    /// are never picked; use them directly.
     pub const fn for_entry(
         amount: i64,
         account: AccountKind,
         is_return: bool,
         is_prenote: bool,
-    ) -> Self {
+    ) -> Option<Self> {
         let debit = amount < 0;
         let prenote = !is_return && (is_prenote || amount == 0);
-        match (account, debit, is_return, prenote) {
+        Some(match (account, debit, is_return, prenote) {
             (AccountKind::Checking, false, true, _) => Self::CheckingReturnedCredit,
             (AccountKind::Checking, false, false, true) => Self::CheckingPrenoteCredit,
             (AccountKind::Checking, false, false, false) => Self::CheckingCredit,
@@ -434,15 +521,28 @@ impl TransactionCode {
             (AccountKind::Savings, true, true, _) => Self::SavingsReturnedDebit,
             (AccountKind::Savings, true, false, true) => Self::SavingsPrenoteDebit,
             (AccountKind::Savings, true, false, false) => Self::SavingsDebit,
-        }
+            (AccountKind::GeneralLedger, false, true, _) => Self::GeneralLedgerReturnedCredit,
+            (AccountKind::GeneralLedger, false, false, true) => Self::GeneralLedgerPrenoteCredit,
+            (AccountKind::GeneralLedger, false, false, false) => Self::GeneralLedgerCredit,
+            (AccountKind::GeneralLedger, true, true, _) => Self::GeneralLedgerReturnedDebit,
+            (AccountKind::GeneralLedger, true, false, true) => Self::GeneralLedgerPrenoteDebit,
+            (AccountKind::GeneralLedger, true, false, false) => Self::GeneralLedgerDebit,
+            (AccountKind::Loan, false, true, _) => Self::LoanReturnedCredit,
+            (AccountKind::Loan, false, false, true) => Self::LoanPrenoteCredit,
+            (AccountKind::Loan, false, false, false) => Self::LoanCredit,
+            (AccountKind::Loan, true, true, _) => Self::LoanReturnedDebit,
+            (AccountKind::Loan, true, false, true) => return None,
+            (AccountKind::Loan, true, false, false) => Self::LoanDebit,
+        })
     }
 
     /// The receiving account kind.
     pub const fn account(self) -> AccountKind {
-        if self.as_code() / 10 == 2 {
-            AccountKind::Checking
-        } else {
-            AccountKind::Savings
+        match self.as_code() / 10 {
+            2 => AccountKind::Checking,
+            3 => AccountKind::Savings,
+            4 => AccountKind::GeneralLedger,
+            _ => AccountKind::Loan,
         }
     }
 
@@ -456,14 +556,26 @@ impl TransactionCode {
         matches!(self.account(), AccountKind::Savings)
     }
 
-    /// True for credits, including credit returns and prenotes (x1–x3).
-    pub const fn is_credit(self) -> bool {
-        matches!(self.as_code() % 10, 1..=3)
+    /// True for general ledger account codes (4x).
+    pub const fn is_general_ledger(self) -> bool {
+        matches!(self.account(), AccountKind::GeneralLedger)
     }
 
-    /// True for debits, including debit returns and prenotes (x6–x8).
+    /// True for loan account codes (5x).
+    pub const fn is_loan(self) -> bool {
+        matches!(self.account(), AccountKind::Loan)
+    }
+
+    /// True for credits, including credit returns, prenotes and zero-dollar
+    /// credits (x1–x4).
+    pub const fn is_credit(self) -> bool {
+        matches!(self.as_code() % 10, 1..=4)
+    }
+
+    /// True for debits, including the loan debit (55), debit returns,
+    /// prenotes and zero-dollar debits (x5–x9).
     pub const fn is_debit(self) -> bool {
-        matches!(self.as_code() % 10, 6..=8)
+        matches!(self.as_code() % 10, 5..=9)
     }
 
     /// True for prenotes (x3, x8), which must have a zero amount.
@@ -474,5 +586,11 @@ impl TransactionCode {
     /// True for returns and notifications of change (x1, x6).
     pub const fn is_return(self) -> bool {
         matches!(self.as_code() % 10, 1 | 6)
+    }
+
+    /// True for zero-dollar remittance codes (x4, x9), which carry
+    /// remittance data in their addenda and must have a zero amount.
+    pub const fn is_zero_dollar_remittance(self) -> bool {
+        matches!(self.as_code() % 10, 4 | 9)
     }
 }
