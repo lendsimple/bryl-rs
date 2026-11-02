@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 0
             })
             .date_of_account_information(day)
+            .maybe_date_closed(status.requires_date_closed().then_some(day))
             .surname(surname)
             .first_name("ALEX")
             .ecoa_code(EcoaCode::Joint)

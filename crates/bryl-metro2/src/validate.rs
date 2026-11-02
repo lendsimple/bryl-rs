@@ -34,6 +34,19 @@ pub enum Violation {
         /// Amount reported.
         amount: u32,
     },
+    /// The account status requires a date closed and none is reported.
+    #[error("Account status '{status}' requires a date closed")]
+    DateClosedRequired {
+        /// Account status.
+        status: AccountStatus,
+    },
+    /// The account status requires a date of first delinquency and none is
+    /// reported.
+    #[error("Account status '{status}' requires a date of first delinquency")]
+    DateOfFirstDelinquencyRequired {
+        /// Account status.
+        status: AccountStatus,
+    },
     /// The payment history profile breaks a rule.
     #[error("payment history profile: {0}")]
     PaymentHistory(PaymentHistoryError),
@@ -160,6 +173,64 @@ impl AccountStatus {
                 | Self::VoluntarySurrender
         )
     }
+
+    /// True for status 13 (paid or closed), which must report the date
+    /// closed: the date paid for installment and mortgage accounts, the date
+    /// closed to further use for revolving accounts and lines of credit.
+    ///
+    /// Not yet checked against the CRRG itself. Two independent sources
+    /// agree: Switch Labs' Metro 2 field reference ("Required for status 13
+    /// (Paid/Closed)") and the m2reporter.com Metro 2 FAQ (question 39). Other
+    /// closing statuses may require it too, but the sources disagree, so
+    /// they are not checked.
+    pub const fn requires_date_closed(self) -> bool {
+        matches!(self, Self::PaidOrClosed)
+    }
+
+    /// True for status 97 (charge-off), which must report the date of first
+    /// delinquency: the date of the first 30-day delinquency that led to the
+    /// charge-off, which starts the FCRA's seven-year reporting period.
+    ///
+    /// Not yet checked against the CRRG itself. Two independent sources
+    /// agree: the m2reporter.com Metro 2 FAQ (question 34) and Switch Labs'
+    /// Metro 2 field reference ("Required for derogatory accounts"). Other
+    /// delinquent statuses likely require it too, but only one source says
+    /// so, so they are not checked.
+    pub const fn requires_date_of_first_delinquency(self) -> bool {
+        matches!(self, Self::ChargeOff)
+    }
+}
+
+/// Checks that the date closed is reported for the statuses in
+/// [`AccountStatus::requires_date_closed`].
+///
+/// # Errors
+///
+/// Returns [`Violation::DateClosedRequired`] otherwise.
+pub fn validate_date_closed(
+    status: AccountStatus,
+    date_closed: Option<NaiveDate>,
+) -> Result<(), Violation> {
+    if status.requires_date_closed() && date_closed.is_none() {
+        return Err(Violation::DateClosedRequired { status });
+    }
+    Ok(())
+}
+
+/// Checks that the date of first delinquency is reported for the statuses in
+/// [`AccountStatus::requires_date_of_first_delinquency`].
+///
+/// # Errors
+///
+/// Returns [`Violation::DateOfFirstDelinquencyRequired`] otherwise.
+pub fn validate_date_of_first_delinquency(
+    status: AccountStatus,
+    date_of_first_delinquency: Option<NaiveDate>,
+) -> Result<(), Violation> {
+    if status.requires_date_of_first_delinquency() && date_of_first_delinquency.is_none() {
+        return Err(Violation::DateOfFirstDelinquencyRequired { status });
+    }
+    Ok(())
 }
 
 /// Checks the payment rating against the account status: required (any
@@ -217,8 +288,9 @@ pub fn validate_payment_history(profile: &str) -> Result<(), PaymentHistoryError
 }
 
 impl BaseSegment {
-    /// Checks the cross-field rules (payment rating, amount past due,
-    /// payment history profile), the retired status 05, and the characters
+    /// Checks the cross-field rules (payment rating, amount past due, date
+    /// closed, date of first delinquency, payment history profile), the
+    /// retired status 05, and the characters
     /// allowed in names, addresses and account and identification numbers.
     /// Returns every violation.
     ///
@@ -229,6 +301,9 @@ impl BaseSegment {
         let mut violations: Vec<Violation> = [
             validate_payment_rating(self.account_status, self.payment_rating).err(),
             validate_amount_past_due(self.account_status, self.amount_past_due).err(),
+            validate_date_closed(self.account_status, self.date_closed).err(),
+            validate_date_of_first_delinquency(self.account_status, self.date_of_first_delinquency)
+                .err(),
             validate_payment_history(self.payment_history_profile.as_str())
                 .err()
                 .map(Violation::PaymentHistory),

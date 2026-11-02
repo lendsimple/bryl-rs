@@ -1,15 +1,17 @@
 //! Validation: the SSN, phone and date-of-birth helpers (`helpers`), payment
-//! rating (`payment_rating`), amount past due (`amount_past_due`), payment
-//! history profile (`payment_history`), `BaseSegment::validate`
-//! (`base_segment`) and character rules (`characters`).
+//! rating (`payment_rating`), amount past due (`amount_past_due`), date
+//! closed and date of first delinquency (`dates`), payment history profile
+//! (`payment_history`), `BaseSegment::validate` (`base_segment`) and
+//! character rules (`characters`).
 
 mod common;
 
 use common::*;
 use metro2::{
-    AccountStatus, BaseSegment, PaymentHistoryError, PaymentHistoryProfile, PaymentRating,
-    Violation, is_valid_dob, is_valid_phone, is_valid_ssn, validate_amount_past_due,
-    validate_payment_history, validate_payment_rating,
+    AccountStatus, BaseSegment, DataRecord, PaymentHistoryError, PaymentHistoryProfile,
+    PaymentRating, Violation, is_valid_dob, is_valid_phone, is_valid_ssn, validate_amount_past_due,
+    validate_date_closed, validate_date_of_first_delinquency, validate_payment_history,
+    validate_payment_rating,
 };
 
 mod helpers {
@@ -148,6 +150,101 @@ mod amount_past_due {
         assert!(
             err.to_string().contains("must be 0 for status '13'"),
             "{err}"
+        );
+    }
+}
+
+mod dates {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn date_closed_required_for_paid_or_closed() {
+        let status = AccountStatus::PaidOrClosed;
+        assert_eq!(
+            validate_date_closed(status, Some(date(2020, 6, 30))),
+            Ok(())
+        );
+        let err = validate_date_closed(status, None).unwrap_err();
+        assert_eq!(err, Violation::DateClosedRequired { status });
+        assert!(err.to_string().contains("'13'"), "{err}");
+    }
+
+    #[test]
+    fn date_closed_optional_for_other_statuses() {
+        // A current account may be closed with a balance still due.
+        for status in [AccountStatus::Current, AccountStatus::ChargeOff] {
+            assert_eq!(validate_date_closed(status, None), Ok(()), "{status:?}");
+            assert_eq!(
+                validate_date_closed(status, Some(date(2020, 6, 30))),
+                Ok(()),
+                "{status:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn date_of_first_delinquency_required_for_charge_off() {
+        let status = AccountStatus::ChargeOff;
+        assert_eq!(
+            validate_date_of_first_delinquency(status, Some(date(2020, 1, 15))),
+            Ok(())
+        );
+        let err = validate_date_of_first_delinquency(status, None).unwrap_err();
+        assert_eq!(err, Violation::DateOfFirstDelinquencyRequired { status });
+        assert!(err.to_string().contains("'97'"), "{err}");
+    }
+
+    #[test]
+    fn date_of_first_delinquency_optional_for_other_statuses() {
+        for status in [AccountStatus::Current, AccountStatus::Dpd30] {
+            assert_eq!(
+                validate_date_of_first_delinquency(status, None),
+                Ok(()),
+                "{status:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn requirements_by_status() {
+        let closed: Vec<_> = AccountStatus::ALL
+            .iter()
+            .copied()
+            .filter(|status| status.requires_date_closed())
+            .collect();
+        assert_eq!(closed, [AccountStatus::PaidOrClosed]);
+        let delinquent: Vec<_> = AccountStatus::ALL
+            .iter()
+            .copied()
+            .filter(|status| status.requires_date_of_first_delinquency())
+            .collect();
+        assert_eq!(delinquent, [AccountStatus::ChargeOff]);
+    }
+
+    #[test]
+    fn data_record_reports_missing_dates() {
+        let paid = DataRecord::new(BaseSegment {
+            account_status: AccountStatus::PaidOrClosed,
+            payment_rating: Some(PaymentRating::Current),
+            ..base()
+        });
+        assert_eq!(
+            paid.validate(),
+            Err(vec![Violation::DateClosedRequired {
+                status: AccountStatus::PaidOrClosed
+            }])
+        );
+        let charged_off = DataRecord::new(BaseSegment {
+            account_status: AccountStatus::ChargeOff,
+            amount_past_due: 1500,
+            ..base()
+        });
+        assert_eq!(
+            charged_off.validate(),
+            Err(vec![Violation::DateOfFirstDelinquencyRequired {
+                status: AccountStatus::ChargeOff
+            }])
         );
     }
 }

@@ -49,13 +49,18 @@ pub fn base() -> BaseSegment {
         .build()
 }
 
-/// A base segment with `status`, and a payment rating if the status requires one.
+/// A base segment with `status`, and the payment rating, date closed and
+/// date of first delinquency the status requires.
 pub fn base_with_status(status: AccountStatus) -> BaseSegment {
     BaseSegment {
         account_status: status,
         payment_rating: status
             .requires_payment_rating()
             .then_some(PaymentRating::Current),
+        date_closed: status.requires_date_closed().then(|| date(2020, 6, 30)),
+        date_of_first_delinquency: status
+            .requires_date_of_first_delinquency()
+            .then(|| date(2020, 1, 15)),
         ..base()
     }
 }

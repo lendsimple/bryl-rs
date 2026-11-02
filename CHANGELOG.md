@@ -8,6 +8,12 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-metro2` checks that status 13 (paid or closed) reports a date
+  closed and status 97 (charge-off) a date of first delinquency
+  (`AccountStatus::requires_date_closed`,
+  `AccountStatus::requires_date_of_first_delinquency`,
+  `validate_date_closed`, `validate_date_of_first_delinquency`). Two public
+  sources agree on each; neither is yet checked against the CRRG.
 - `bryl-nacha` lenient reading: `File::read_lenient`,
   `Reader::read_file_lenient` and `Reader::next_entry_lenient` keep an entry
   whose detail or addenda fail to decode (a bad routing check digit, an
