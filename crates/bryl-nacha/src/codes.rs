@@ -113,10 +113,11 @@ impl StandardEntryClass {
     ///   CTX (NACHA's developer guide and bank specifications).
     /// - None for the other check conversion classes (ARC, BOC, POP, RCK,
     ///   TRC, XCK), and up to 9,999 for ATX and TRX (moov-io/ach).
-    /// - None for ADV, which has no addenda, and for COR (type 98) and MTE,
-    ///   POS and SHR (type 02): this library writes only type-05 and return
-    ///   (type-99) addenda, so entries of these classes cannot carry their
-    ///   required addenda. Return entries carry no type-05 addenda at all.
+    /// - None for ADV, which has no addenda, and for COR, whose entries carry
+    ///   one type-98 addendum instead. None for MTE, POS and SHR (type 02):
+    ///   this library does not write type-02 addenda, so entries of these
+    ///   classes cannot carry their required addenda. Return entries carry no
+    ///   type-05 addenda at all.
     /// - One for everything else (CIE, ACK, DNE, ENR; PBR and CBR, replaced by
     ///   IAT, are not checked by moov-io).
     pub const fn max_addenda(self) -> u16 {
@@ -475,6 +476,95 @@ impl ReturnReasonCode {
             Self::RepresentativePayeeDeceased | Self::AccountHolderDeceased
         )
     }
+}
+
+/// Change code of a notification of change, carried by a
+/// [`NocAddendum`](crate::NocAddendum): what the originator must correct.
+///
+/// Codes and titles follow moov-io/ach. C10–C12 are retired. Each code's
+/// documentation says what the addendum's corrected data holds.
+#[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ChangeCode {
+    /// `C01`: Incorrect DFI account number. Corrected data: the account
+    /// number.
+    #[code("C01")]
+    IncorrectAccountNumber,
+    /// `C02`: Incorrect routing number. Corrected data: the routing number.
+    #[code("C02")]
+    IncorrectRoutingNumber,
+    /// `C03`: Incorrect routing number and DFI account number. Corrected
+    /// data: the routing number, then the account number.
+    #[code("C03")]
+    IncorrectRoutingAndAccountNumber,
+    /// `C04`: Incorrect individual name or receiving company name.
+    /// Corrected data: the name.
+    #[code("C04")]
+    IncorrectName,
+    /// `C05`: Incorrect transaction code. Corrected data: the transaction
+    /// code.
+    #[code("C05")]
+    IncorrectTransactionCode,
+    /// `C06`: Incorrect DFI account number and transaction code. Corrected
+    /// data: the account number, then the transaction code.
+    #[code("C06")]
+    IncorrectAccountNumberAndTransactionCode,
+    /// `C07`: Incorrect routing number, DFI account number and transaction
+    /// code. Corrected data: the routing number, account number and
+    /// transaction code.
+    #[code("C07")]
+    IncorrectRoutingAccountAndTransactionCode,
+    /// `C08`: Incorrect receiving DFI identification (IAT only).
+    #[code("C08")]
+    IncorrectReceivingDfi,
+    /// `C09`: Incorrect individual identification number. Corrected data:
+    /// the identification number.
+    #[code("C09")]
+    IncorrectIndividualId,
+    /// `C13`: Addenda format error: the entry was processed, but its addenda
+    /// were unclear or incorrect.
+    #[code("C13")]
+    AddendaFormatError,
+    /// `C14`: Incorrect SEC code for an outbound international payment,
+    /// which must use IAT.
+    #[code("C14")]
+    IncorrectSecForOutboundIat,
+}
+
+/// Refused change code, carried by a
+/// [`RefusedNocAddendum`](crate::RefusedNocAddendum): why the ODFI refuses a
+/// notification of change (codes and titles as in moov-io/ach).
+#[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RefusedChangeCode {
+    /// `C61`: Misrouted notification of change.
+    #[code("C61")]
+    Misrouted,
+    /// `C62`: Incorrect trace number.
+    #[code("C62")]
+    IncorrectTraceNumber,
+    /// `C63`: Incorrect company identification number.
+    #[code("C63")]
+    IncorrectCompanyId,
+    /// `C64`: Incorrect individual identification number or identification
+    /// number.
+    #[code("C64")]
+    IncorrectIndividualId,
+    /// `C65`: Incorrectly formatted corrected data.
+    #[code("C65")]
+    IncorrectlyFormattedCorrectedData,
+    /// `C66`: Incorrect discretionary data.
+    #[code("C66")]
+    IncorrectDiscretionaryData,
+    /// `C67`: Routing number not from the original entry detail record.
+    #[code("C67")]
+    RoutingNumberNotFromOriginalEntry,
+    /// `C68`: DFI account number not from the original entry detail record.
+    #[code("C68")]
+    AccountNumberNotFromOriginalEntry,
+    /// `C69`: Incorrect transaction code.
+    #[code("C69")]
+    IncorrectTransactionCode,
 }
 
 /// Kind of receiving account.

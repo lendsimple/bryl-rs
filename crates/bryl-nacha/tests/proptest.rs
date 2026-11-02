@@ -1,10 +1,11 @@
-//! Property tests: any valid file the writer produces, returns included,
-//! reads back to the same entries and validates cleanly, and arbitrary input
+//! Property tests: any valid file the writer produces, returns and
+//! notifications of change included, reads back to the same entries and validates cleanly, and arbitrary input
 //! never panics the reader.
 
 use chrono::NaiveDate;
 use nacha::{
-    BatchParams, EntryParams, File, FileParams, ReturnParams, ReturnReasonCode, ServiceClassCode,
+    BatchParams, ChangeCode, EntryParams, File, FileParams, NocParams, RefusedChangeCode,
+    RefusedNocParams, ReturnParams, ReturnReasonCode, ServiceClassCode, SpecialAddendumParams,
     StandardEntryClass, TransactionCode, Writer,
 };
 use proptest::prelude::*;
@@ -48,6 +49,38 @@ fn return_params() -> impl Strategy<Value = ReturnParams> {
         })
 }
 
+/// A notification of change addendum or, half the time, a refusal of one.
+fn noc_params() -> impl Strategy<Value = SpecialAddendumParams> {
+    (
+        proptest::sample::select(ChangeCode::ALL),
+        proptest::option::of(proptest::sample::select(RefusedChangeCode::ALL)),
+        0u64..=999_999_999_999_999,
+        0u32..=99_999_999,
+        text(29),
+        0u32..=9_999_999,
+    )
+        .prop_map(
+            |(change_code, refused, original_trace, dfi, corrected_data, sequence)| match refused {
+                None => NocParams::builder()
+                    .change_code(change_code)
+                    .original_entry_trace_number(original_trace)
+                    .original_receiving_dfi_id(dfi)
+                    .corrected_data(corrected_data)
+                    .build()
+                    .into(),
+                Some(refused_change_code) => RefusedNocParams::builder()
+                    .refused_change_code(refused_change_code)
+                    .original_entry_trace_number(original_trace)
+                    .original_receiving_dfi_id(dfi)
+                    .corrected_data(corrected_data)
+                    .change_code(change_code)
+                    .trace_sequence_number(sequence)
+                    .build()
+                    .into(),
+            },
+        )
+}
+
 fn entry(
     service_class: ServiceClassCode,
     sec: StandardEntryClass,
@@ -64,6 +97,8 @@ fn entry(
         .filter(|&code| {
             !code.is_zero_dollar_remittance() || sec.allows_zero_dollar_remittance(code)
         })
+        // Notifications of change use the return codes.
+        .filter(|&code| sec != StandardEntryClass::Cor || code.is_return())
         .collect();
     (
         proptest::sample::select(codes),
@@ -74,19 +109,24 @@ fn entry(
         text(22),
         proptest::collection::vec(text(80), 0..=max_addenda),
         return_params(),
+        noc_params(),
     )
         .prop_map(
-            |(code, routing, account, amount, id, name, addenda, returned)| {
-                // Returns carry only their return addendum, and zero-dollar
-                // remittance entries need one addendum for their data.
-                let (addenda, returned) = if code.is_return() {
-                    (Vec::new(), Some(returned))
+            move |(code, routing, account, amount, id, name, addenda, returned, noc)| {
+                // Returns and notifications of change carry only their own
+                // addendum, and zero-dollar remittance entries need one
+                // addendum for their data.
+                let cor = sec == StandardEntryClass::Cor;
+                let (addenda, special) = if cor {
+                    (Vec::new(), Some(noc))
+                } else if code.is_return() {
+                    (Vec::new(), Some(returned.into()))
                 } else if code.is_zero_dollar_remittance() && addenda.is_empty() {
                     (vec!["REMITTANCE".to_owned()], None)
                 } else {
                     (addenda, None)
                 };
-                let zero_amount = code.is_prenote() || code.is_zero_dollar_remittance();
+                let zero_amount = cor || code.is_prenote() || code.is_zero_dollar_remittance();
                 EntryParams::builder()
                     .transaction_code(code)
                     .receiving_dfi(routing.parse().unwrap())
@@ -95,7 +135,7 @@ fn entry(
                     .individual_id(id)
                     .individual_name(name)
                     .addenda(addenda)
-                    .maybe_special_addendum(returned)
+                    .maybe_special_addendum(special)
                     .build()
             },
         )
@@ -103,7 +143,11 @@ fn entry(
 
 /// Entry classes paired with the service classes they can use: TEL is
 /// debit-only and CIE credit-only.
-const CLASSES: [(StandardEntryClass, ServiceClassCode); 10] = [
+const CLASSES: [(StandardEntryClass, ServiceClassCode); 11] = [
+    (
+        StandardEntryClass::Cor,
+        ServiceClassCode::MixedDebitsAndCredits,
+    ),
     (
         StandardEntryClass::Ppd,
         ServiceClassCode::MixedDebitsAndCredits,

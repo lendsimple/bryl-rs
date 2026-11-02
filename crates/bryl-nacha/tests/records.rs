@@ -9,9 +9,10 @@ use bryl::Record;
 use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    AccountKind, Addendum, BatchControl, BatchHeader, Entry, EntryDetail, FileControl, FileHeader,
-    FileIdModifier, NachaRecord, ReturnAddendum, ReturnReasonCode, RoutingNumber,
-    RoutingNumberError, ServiceClassCode, StandardEntryClass, TransactionCode,
+    AccountKind, Addendum, BatchControl, BatchHeader, ChangeCode, Entry, EntryDetail, FileControl,
+    FileHeader, FileIdModifier, NachaRecord, NocAddendum, RefusedChangeCode, RefusedNocAddendum,
+    ReturnAddendum, ReturnReasonCode, RoutingNumber, RoutingNumberError, ServiceClassCode,
+    SpecialAddendum, StandardEntryClass, TransactionCode,
 };
 
 fn file_header() -> FileHeader {
@@ -69,6 +70,43 @@ fn addendum(info: &str, sequence: u16) -> Addendum {
         .addenda_sequence_number(sequence)
         .entry_detail_sequence_number(1_234_567)
         .build()
+}
+
+/// A C01 notification of change, laid out by hand: positions 1-6 `798C01`,
+/// 7-21 original trace, 22-27 reserved, 28-35 original RDFI, 36-64
+/// corrected data, 65-79 reserved, 80-94 trace number.
+fn noc_line() -> String {
+    let line = format!(
+        "798C01{}{}{}{:<29}{}{}",
+        "091000010000001",
+        " ".repeat(6),
+        "09100001",
+        "123456789012",
+        " ".repeat(15),
+        "021000020000007",
+    );
+    assert_eq!(line.len(), 94);
+    line
+}
+
+/// A C62 refusal of a C01 notification of change, laid out by hand:
+/// positions 1-64 as in a notification of change, 65-67 the refused
+/// change code, 68-74 the refused notification's trace sequence, 75-79
+/// reserved, 80-94 trace number.
+fn refused_noc_line() -> String {
+    let line = format!(
+        "798C62{}{}{}{:<29}{}{}{}{}",
+        "091000010000001",
+        " ".repeat(6),
+        "09100001",
+        "123456789012",
+        "C01",
+        "0000007",
+        " ".repeat(5),
+        "091000010000009",
+    );
+    assert_eq!(line.len(), 94);
+    line
 }
 
 fn return_addendum(date_of_death: Option<NaiveDate>) -> ReturnAddendum {
@@ -313,8 +351,75 @@ mod records {
             NachaRecord::dispatch(line.as_bytes()).unwrap(),
             NachaRecord::Addendum(addendum("INFO", 1))
         );
-        // Notification of change addenda (type 98) are not supported.
-        let line = line.replacen("705", "798", 1);
+        let line = noc_line();
+        assert!(matches!(
+            NachaRecord::dispatch(line.as_bytes()).unwrap(),
+            NachaRecord::NocAddendum(_)
+        ));
+        // A refused change code (C61-C69) selects the refusal layout.
+        let line = refused_noc_line();
+        assert!(matches!(
+            NachaRecord::dispatch(line.as_bytes()).unwrap(),
+            NachaRecord::RefusedNocAddendum(_)
+        ));
+    }
+
+    #[test]
+    fn noc_addendum_layout() {
+        let line = noc_line();
+        let addendum = NocAddendum::decode_exact(line.as_bytes()).unwrap();
+        assert_eq!(addendum.change_code, ChangeCode::IncorrectAccountNumber);
+        assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
+        assert_eq!(addendum.original_receiving_dfi_id, 9_100_001);
+        assert_eq!(addendum.corrected_data, "123456789012");
+        assert_eq!(addendum.trace_number, 21_000_020_000_007);
+        assert_eq!(addendum.encode().unwrap(), line);
+    }
+
+    #[test]
+    fn refused_noc_addendum_layout() {
+        let line = refused_noc_line();
+        let addendum = RefusedNocAddendum::decode_exact(line.as_bytes()).unwrap();
+        assert_eq!(
+            addendum.refused_change_code,
+            RefusedChangeCode::IncorrectTraceNumber
+        );
+        assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
+        assert_eq!(addendum.original_receiving_dfi_id, 9_100_001);
+        assert_eq!(addendum.corrected_data, "123456789012");
+        assert_eq!(addendum.change_code, ChangeCode::IncorrectAccountNumber);
+        assert_eq!(addendum.trace_sequence_number, 7);
+        assert_eq!(addendum.trace_number, 91_000_010_000_009);
+        assert_eq!(addendum.encode().unwrap(), line);
+    }
+
+    #[test]
+    fn noc_addendum_roundtrip() {
+        let addendum = NocAddendum::builder()
+            .change_code(ChangeCode::IncorrectTransactionCode)
+            .original_entry_trace_number(91_000_010_000_001)
+            .original_receiving_dfi_id(9_100_001)
+            .corrected_data("32")
+            .trace_number(21_000_020_000_001)
+            .build();
+        let line = addendum.encode().unwrap();
+        assert_eq!(&line[..6], "798C05");
+        assert_eq!(
+            NocAddendum::decode_exact(line.as_bytes()).unwrap(),
+            addendum
+        );
+    }
+
+    #[test]
+    fn unknown_change_codes_are_rejected() {
+        use bryl::read::Dispatch;
+        // C10-C12 are retired; C70 is not a refused change code.
+        for code in ["C10", "C12", "C70", "R01"] {
+            let line = noc_line().replacen("C01", code, 1);
+            assert!(NachaRecord::dispatch(line.as_bytes()).is_err(), "{code}");
+        }
+        // The refused notification's own change code must be valid too.
+        let line = refused_noc_line().replacen("C01", "C11", 1);
         assert!(NachaRecord::dispatch(line.as_bytes()).is_err());
     }
 
@@ -355,6 +460,8 @@ mod codes {
         assert_eq!(ServiceClassCode::ALL.len(), 3);
         assert_eq!(StandardEntryClass::ALL.len(), 24);
         assert_eq!(TransactionCode::ALL.len(), 30);
+        assert_eq!(ChangeCode::ALL.len(), 11);
+        assert_eq!(RefusedChangeCode::ALL.len(), 9);
     }
 
     #[test]
@@ -870,6 +977,28 @@ mod entry {
         let encoded = entry.encode().unwrap();
         assert_eq!(encoded.len(), 94 * 2 + 1);
         assert_eq!(Entry::decode(encoded.as_bytes()).unwrap(), entry);
+    }
+
+    #[test]
+    fn encode_decode_notifications_of_change() {
+        let noc = NocAddendum::decode_exact(noc_line().as_bytes()).unwrap();
+        let refused = RefusedNocAddendum::decode_exact(refused_noc_line().as_bytes()).unwrap();
+        for special in [SpecialAddendum::from(noc), SpecialAddendum::from(refused)] {
+            let entry = Entry {
+                detail: EntryDetail {
+                    addenda_record_indicator: 1,
+                    amount: 0,
+                    ..entry_detail(TransactionCode::CheckingReturnedCredit)
+                },
+                addenda: vec![],
+                special_addendum: Some(special),
+            };
+            assert_eq!(entry.addenda_count(), 1);
+            let decoded = Entry::decode(entry.encode().unwrap().as_bytes()).unwrap();
+            assert_eq!(decoded, entry);
+            assert!(decoded.noc_addendum().is_some() || decoded.refused_noc_addendum().is_some());
+            assert!(decoded.return_addendum().is_none());
+        }
     }
 
     #[test]

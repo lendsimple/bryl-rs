@@ -85,7 +85,8 @@ impl<R: BufRead> Reader<R> {
 
     /// Reads the next entry and its addenda, or returns `None` if the next
     /// record is not an entry detail (normally the batch control). A second
-    /// return addendum is left unread, so the next read reports it.
+    /// return or notification of change addendum is left unread, so the next
+    /// read reports it.
     ///
     /// # Errors
     ///
@@ -106,12 +107,24 @@ impl<R: BufRead> Reader<R> {
         let has_special = |entry: &Entry| entry.special_addendum.is_some();
         while let Some(record) = self.inner.next_if(|record| match record {
             NachaRecord::Addendum(_) => Ok(record),
-            NachaRecord::ReturnAddendum(_) if !has_special(&entry) => Ok(record),
+            NachaRecord::ReturnAddendum(_)
+            | NachaRecord::NocAddendum(_)
+            | NachaRecord::RefusedNocAddendum(_)
+                if !has_special(&entry) =>
+            {
+                Ok(record)
+            }
             other => Err(other),
         })? {
             match record {
                 NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
                 NachaRecord::ReturnAddendum(addendum) => {
+                    entry.special_addendum = Some(addendum.into());
+                }
+                NachaRecord::NocAddendum(addendum) => {
+                    entry.special_addendum = Some(addendum.into());
+                }
+                NachaRecord::RefusedNocAddendum(addendum) => {
                     entry.special_addendum = Some(addendum.into());
                 }
                 _ => unreachable!("selected above"),

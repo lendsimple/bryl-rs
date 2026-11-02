@@ -188,6 +188,10 @@
 //! - **Returns.** A return entry (transaction code x1 or x6) carries exactly
 //!   one [`ReturnAddendum`] whose trace number is its own, and no other
 //!   addenda; only R14 and R15 returns may give a date of death.
+//! - **Notifications of change.** Every entry in a COR batch has a zero
+//!   amount, a return transaction code and exactly one [`NocAddendum`] or
+//!   [`RefusedNocAddendum`] whose trace number is its own, and no other
+//!   addenda; type-98 addenda appear only in COR batches.
 //! - **Routing numbers** must pass the ABA checksum, which [`RoutingNumber`]
 //!   checks when it is created.
 //!
@@ -319,6 +323,63 @@
 //! To write a return, give [`EntryParams::special_addendum`] a
 //! [`ReturnParams`]; the writer fills in the addendum's trace number.
 //!
+//! # Notifications of change
+//!
+//! A receiving bank that posts an entry despite wrong details (an outdated
+//! account number, checking instead of savings) sends a notification of
+//! change (NOC): a zero-amount entry in a COR batch, with a return
+//! transaction code and a type-98 [`NocAddendum`] in place of type-05
+//! addenda. Its [`ChangeCode`] says what to correct and its corrected data
+//! holds the new value; update your records before the next entry. An
+//! originator can refuse a notification with a [`RefusedNocAddendum`] and a
+//! [`RefusedChangeCode`].
+//!
+//! ```
+//! # fn sample() -> Result<String, Box<dyn std::error::Error>> {
+//! #     use nacha::*;
+//! #     let created_at = chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap().and_hms_opt(9, 0, 0).unwrap();
+//! #     let mut writer = Writer::new(Vec::new());
+//! #     let mut file = writer.begin_file(FileParams::builder().immediate_destination("091000019".parse()?)
+//! #         .immediate_destination_name("ACME BANK").immediate_origin("0210000210").immediate_origin_name("RDFI")
+//! #         .created_at(created_at).build())?;
+//! #     let mut batch = file.begin_batch(BatchParams::builder().service_class_code(ServiceClassCode::MixedDebitsAndCredits)
+//! #         .company_name("ACME").company_id("1234567890").standard_entry_class(StandardEntryClass::Cor)
+//! #         .company_entry_description("NOC").originating_dfi_id(2_100_002).build())?;
+//! #     batch.entry(EntryParams::builder().transaction_code(TransactionCode::CheckingReturnedDebit)
+//! #         .receiving_dfi("091000019".parse()?).account_number("123").amount(0)
+//! #         .individual_id("LOAN0001").individual_name("JANE SMITH")
+//! #         .special_addendum(NocParams::builder().change_code(ChangeCode::IncorrectAccountNumber)
+//! #             .original_entry_trace_number(91_000_010_000_001).original_receiving_dfi_id(9_100_001)
+//! #             .corrected_data("987654321").build())
+//! #         .build())?;
+//! #     batch.finish()?;
+//! #     file.finish()?;
+//! #     Ok(String::from_utf8(writer.into_inner())?)
+//! # }
+//! # let notifications = sample()?;
+//! use nacha::ChangeCode;
+//!
+//! let file = nacha::File::read(notifications.as_bytes())?;
+//! assert_eq!(file.validate(), []);
+//! for entry in file.batches.iter().flat_map(|batch| &batch.entries) {
+//!     if let Some(noc) = entry.noc_addendum() {
+//!         if noc.change_code == ChangeCode::IncorrectAccountNumber {
+//!             println!(
+//!                 "entry {:015}: new account number {}",
+//!                 noc.original_entry_trace_number,
+//!                 noc.corrected_data.trim()
+//!             );
+//!         }
+//!         assert_eq!(noc.corrected_data, "987654321");
+//!     }
+//! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! To write one, give [`EntryParams::special_addendum`] a [`NocParams`] or
+//! [`RefusedNocParams`]. The corrected data is kept as written; see
+//! [`ChangeCode`] for what it holds for each code.
+//!
 //! # Configuration
 //!
 //! ```
@@ -356,9 +417,8 @@
 //!
 //! # Not supported
 //!
-//! - Type 02 addenda (MTE, POS, SHR) and type 98 addenda (notifications of
-//!   change, COR). Entries of these classes cannot carry their required
-//!   addenda, and reading a file that contains them fails.
+//! - Type 02 addenda (MTE, POS, SHR). Entries of these classes cannot carry
+//!   their required addenda, and reading a file that contains them fails.
 //! - Dishonored and contested dishonored returns (R61–R77), whose type-99
 //!   addenda use another layout; reading them fails.
 //! - International entries (IAT), their addenda types 10–18 and their
@@ -408,7 +468,8 @@ mod writer;
 /// Text normalization applied when writing; see [`Writer::sanitize`].
 pub use bryl::Sanitize;
 pub use codes::{
-    AccountKind, REVERSAL, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
+    AccountKind, ChangeCode, REVERSAL, RefusedChangeCode, ReturnReasonCode, ServiceClassCode,
+    StandardEntryClass, TransactionCode,
 };
 pub use entry::{Entry, SpecialAddendum};
 pub use error::Error;
@@ -416,14 +477,14 @@ pub use file::{Batch, File};
 pub use reader::{Entries, Reader};
 pub use records::{
     Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader, NachaRecord,
-    RECORD_LENGTH, ReturnAddendum,
+    NocAddendum, RECORD_LENGTH, RefusedNocAddendum, ReturnAddendum,
 };
 pub use totals::{HASH_MODULUS, Totals};
 pub use types::{FileIdModifier, FileIdModifierError, RoutingNumber, RoutingNumberError};
 pub use validate::{Issue, IssueKind};
 pub use writer::{
-    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, ReturnParams,
-    SpecialAddendumParams, Writer,
+    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, NocParams,
+    RefusedNocParams, ReturnParams, SpecialAddendumParams, Writer,
 };
 
 /// Runs the code in README.md as doctests.

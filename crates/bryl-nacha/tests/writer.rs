@@ -889,3 +889,150 @@ mod returns {
         assert_eq!(entry.return_addendum().unwrap().date_of_death, date);
     }
 }
+
+mod notifications {
+    use super::*;
+    use nacha::{ChangeCode, RefusedChangeCode, RefusedNocParams};
+    use pretty_assertions::assert_eq;
+
+    fn write_cor(params: EntryParams) -> Result<nacha::Entry, Error> {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file.begin_batch(cor_batch_params()).unwrap();
+        batch.entry(params)
+    }
+
+    fn rejected(params: EntryParams) -> IssueKind {
+        match write_cor(params) {
+            Err(Error::InvalidEntry(kind)) => kind,
+            other => panic!("expected InvalidEntry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cor_batch_reads_back_and_validates() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file.begin_batch(cor_batch_params()).unwrap();
+        let entry = batch.entry(noc_entry_params()).unwrap();
+        let control = batch.finish().unwrap();
+        file.finish().unwrap();
+
+        let addendum = entry.noc_addendum().unwrap();
+        assert_eq!(entry.detail.addenda_record_indicator, 1);
+        assert_eq!(addendum.trace_number, entry.detail.trace_number);
+        assert_eq!(addendum.change_code, ChangeCode::IncorrectAccountNumber);
+        assert_eq!(addendum.corrected_data, "987654321");
+        // The entry and its type-98 addendum.
+        assert_eq!(control.entry_addenda_count, 2);
+        assert_eq!(control.total_debit_amount, 0);
+
+        let file = File::read(writer.get_ref().as_slice()).unwrap();
+        assert_eq!(file.validate(), []);
+        assert_eq!(file.batches[0].entries[0], entry);
+    }
+
+    #[test]
+    fn refused_notification_is_accepted() {
+        let params = EntryParams {
+            special_addendum: Some(
+                RefusedNocParams::builder()
+                    .refused_change_code(RefusedChangeCode::IncorrectTraceNumber)
+                    .original_entry_trace_number(91_000_010_000_001)
+                    .original_receiving_dfi_id(9_100_001)
+                    .corrected_data("987654321")
+                    .change_code(ChangeCode::IncorrectAccountNumber)
+                    .trace_sequence_number(7)
+                    .build()
+                    .into(),
+            ),
+            ..noc_entry_params()
+        };
+        let entry = write_cor(params).unwrap();
+        let addendum = entry.refused_noc_addendum().unwrap();
+        assert_eq!(addendum.trace_number, entry.detail.trace_number);
+        assert_eq!(addendum.trace_sequence_number, 7);
+    }
+
+    #[test]
+    fn notification_needs_a_zero_amount() {
+        let kind = rejected(EntryParams {
+            amount: 100,
+            ..noc_entry_params()
+        });
+        assert_eq!(kind, IssueKind::NocAmount { amount: 100 });
+    }
+
+    #[test]
+    fn notification_needs_a_return_transaction_code() {
+        let kind = rejected(EntryParams {
+            transaction_code: TransactionCode::CheckingCredit,
+            ..noc_entry_params()
+        });
+        assert_eq!(
+            kind,
+            IssueKind::NocTransactionCode {
+                transaction_code: TransactionCode::CheckingCredit
+            }
+        );
+        // General ledger and loan return codes are notification codes too.
+        for code in [
+            TransactionCode::GeneralLedgerReturnedCredit,
+            TransactionCode::LoanReturnedDebit,
+        ] {
+            let result = write_cor(EntryParams {
+                transaction_code: code,
+                ..noc_entry_params()
+            });
+            assert!(result.is_ok(), "{code:?}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn cor_entries_need_a_notification() {
+        let kind = rejected(EntryParams {
+            special_addendum: None,
+            ..noc_entry_params()
+        });
+        assert_eq!(kind, IssueKind::MissingNocAddendum);
+    }
+
+    #[test]
+    fn cor_entries_cannot_carry_a_return_addendum() {
+        let kind = rejected(EntryParams {
+            special_addendum: Some(return_params(ReturnReasonCode::AccountClosed).into()),
+            ..noc_entry_params()
+        });
+        assert_eq!(
+            kind,
+            IssueKind::UnexpectedReturnAddendum {
+                transaction_code: TransactionCode::CheckingReturnedDebit
+            }
+        );
+    }
+
+    #[test]
+    fn cor_entries_cannot_carry_type_05_addenda() {
+        let kind = rejected(EntryParams {
+            addenda: vec!["MEMO".into()],
+            ..noc_entry_params()
+        });
+        assert!(matches!(kind, IssueKind::TooManyAddenda { max: 0, .. }));
+    }
+
+    #[test]
+    fn notifications_only_in_cor_batches() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::MixedDebitsAndCredits))
+            .unwrap();
+        let err = batch.entry(noc_entry_params()).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::InvalidEntry(IssueKind::UnexpectedNocAddendum {
+                standard_entry_class: StandardEntryClass::Ppd
+            })
+        ));
+    }
+}
