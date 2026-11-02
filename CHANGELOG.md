@@ -6,94 +6,117 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-01
+
+This release has breaking changes; see [Changed](#changed). Code enums are
+now `#[non_exhaustive]`, so later releases can add codes without another
+breaking change.
+
 ### Added
 
-- An optional `serde` feature in `bryl`, `bryl-nacha` and `bryl-metro2`.
-  Files, batches, entries, data records, records and segments serialize and
-  deserialize; code tables as their codes (`"22"`, `"R01"`, `"11"`);
-  `RoutingNumber`, `FileIdModifier` and `PaymentHistoryProfile` as their
-  text, checked again when deserialized; dates as ISO 8601. Fields fixed
-  by the format are left out. Issues, violations, `UnreadEntry` and
-  `bryl::Error` can be serialized but not deserialized.
+#### bryl-nacha
 
-- `bryl-metro2` checks more CRRG 2020 rules: the header's reporter name
-  and address are required (`HeaderRecord::validate`, checked by
-  `Writer::begin_file` and reported by `File::validate` as `Issue::Header`);
-  special comment M is not combined with a "closed at the consumer's
-  request" compliance condition code (`validate_closed_codes`); and
-  collection agency, debt buyer and returned check accounts (types 48, 0C,
-  77) report a K1 segment (`AccountType::requires_k1`).
-- `bryl-metro2` checks the date closed and the date of first delinquency
-  (DOFD) against the 2020 CRRG. Paid accounts (statuses 13 and 61-65)
-  report a date closed; charged-off installment and mortgage accounts don't.
-  The DOFD is reported exactly when the CRRG's Field 25 hierarchy calls for
-  it: delinquent and derogatory statuses, paid accounts that were late, and
-  current accounts with a bankruptcy or receivership indicator
-  (`AccountStatus::requires_date_closed`,
-  `BaseSegment::requires_date_of_first_delinquency`, `validate_date_closed`,
-  `validate_date_of_first_delinquency`).
-- `bryl-nacha` lenient reading: `File::read_lenient`,
-  `Reader::read_file_lenient` and `Reader::next_entry_lenient` keep an entry
-  whose detail or addenda fail to decode (a bad routing check digit, an
-  unknown code) as an `UnreadEntry`, with its raw lines, location and error,
-  and `detail_field` to decode its intact fields. `File::validate` reports
+- Notifications of change: COR entries with a type-98 `NocAddendum`
+  (`ChangeCode` C01–C09, C13, C14) or `RefusedNocAddendum`
+  (`RefusedChangeCode` C61–C69). The writer and `File::validate` check the
+  COR rules: a zero amount, a return transaction code, exactly one type-98
+  addendum with the entry's trace number, and no type-98 addenda outside
+  COR batches.
+- Dishonored and contested dishonored returns: type-99
+  `DishonoredReturnAddendum` (`DishonoredReturnCode` R61, R62, R67–R70) and
+  `ContestedReturnAddendum` (`ContestedReturnCode` R71–R77), written with
+  `DishonoredReturnParams` and `ContestedReturnParams`. The reader picks the
+  layout from the code. The return rules apply to them, and their two-digit
+  reason codes must name known codes.
+- Transaction codes for general ledger (41–44, 46–49) and loan (51–56)
+  accounts, and the zero-dollar remittance codes (24, 29, 34, 39, 44, 49,
+  54), following moov-io/ach:
+  - `AccountKind::GeneralLedger` and `AccountKind::Loan`;
+  - `TransactionCode::is_general_ledger`, `is_loan` and
+    `is_zero_dollar_remittance`;
+  - `StandardEntryClass::allows_zero_dollar_remittance`.
+
+  The writer and `File::validate` require zero-dollar remittance entries to
+  have a zero amount and an addendum and to appear only in CCD, CTX, ACK
+  and ATX batches. Loan debits (55) may appear only in reversal batches.
+- Lenient reading: `File::read_lenient`, `Reader::read_file_lenient` and
+  `Reader::next_entry_lenient` keep an entry whose detail or addenda fail to
+  decode (a bad routing check digit, an unknown code) as an `UnreadEntry`.
+  It holds the entry's raw lines, location and error, and `detail_field`
+  decodes its intact fields. `File::validate` reports an
   `IssueKind::UnreadEntry` for each. Strict reading is unchanged.
-- `bryl-nacha` reads and writes dishonored and contested dishonored returns:
-  type-99 `DishonoredReturnAddendum` (`DishonoredReturnCode` R61, R62,
-  R67–R70) and `ContestedReturnAddendum` (`ContestedReturnCode` R71–R77),
-  as `SpecialAddendum` variants written with `DishonoredReturnParams` and
-  `ContestedReturnParams`. The reader picks the layout from the code. The
-  writer and `File::validate` apply the return rules to them and check that
-  their two-digit reason codes name known codes.
-- `bryl-nacha` reads and writes notifications of change: COR entries with a
-  type-98 `NocAddendum` (`ChangeCode` C01–C09, C13, C14) or
-  `RefusedNocAddendum` (`RefusedChangeCode` C61–C69), held in
-  `Entry::special_addendum` like return addenda. The writer and
-  `File::validate` check the COR rules: a zero amount, a return transaction
-  code, exactly one type-98 addendum with the entry's trace number, and no
-  type-98 addenda outside COR batches.
-- `bryl-nacha` transaction codes for general ledger (41–44, 46–49) and loan
-  (51–56) accounts, and the zero-dollar remittance codes (24, 29, 34, 39, 44,
-  49, 54), following moov-io/ach. `AccountKind` gains `GeneralLedger` and
-  `Loan`; `TransactionCode` gains `is_general_ledger`, `is_loan` and
-  `is_zero_dollar_remittance`; and
-  `StandardEntryClass::allows_zero_dollar_remittance` says which classes may
-  carry them.
-- The writer and `File::validate` enforce the rules for the new codes:
-  zero-dollar remittance entries have a zero amount and an addendum and
-  appear only in CCD, CTX, ACK and ATX batches, and loan debits (55) appear
-  only in reversal batches.
-- `bryl-nacha` has a `clock` feature, on by default, for `FileParams::now()`.
-  Without it the crates build for targets without a system clock, such as
+- A `clock` feature, on by default, for `FileParams::now()`. Without it the
+  crates build for targets without a system clock, such as
   `wasm32-unknown-unknown`, which CI now checks.
+
+#### bryl-metro2
+
+- More validation, following the 2020 Credit Reporting Resource Guide
+  (CRRG); each rule cites its section in the crate docs:
+  - The date closed is required for paid accounts (statuses 13 and 61–65)
+    and blank for charged-off installment and mortgage accounts
+    (`AccountStatus::requires_date_closed`, `validate_date_closed`).
+  - The date of first delinquency is reported exactly when the CRRG's Field
+    25 hierarchy calls for it: delinquent and derogatory statuses, paid
+    accounts that were late, and current accounts with a bankruptcy or
+    receivership indicator
+    (`BaseSegment::requires_date_of_first_delinquency`,
+    `validate_date_of_first_delinquency`).
+  - The header's reporter name and address are required
+    (`HeaderRecord::validate`). `Writer::begin_file` rejects an invalid
+    header with `Error::InvalidHeader`, and `File::validate` reports it as
+    `Issue::Header`.
+  - Special comment M is not combined with a compliance condition code for
+    an account closed at the consumer's request (`validate_closed_codes`).
+  - Collection agency, debt buyer and returned check accounts (types 48, 0C
+    and 77) report a K1 segment (`AccountType::requires_k1`).
+
+#### All crates
+
+- An optional `serde` feature in `bryl`, `bryl-nacha` and `bryl-metro2`.
+  - Files, batches, entries, data records, records and segments serialize
+    and deserialize.
+  - Code tables serialize as their codes (`"22"`, `"R01"`, `"11"`).
+  - `RoutingNumber`, `FileIdModifier` and `PaymentHistoryProfile` serialize
+    as their text and are checked again when deserialized.
+  - Dates use ISO 8601, and fields fixed by the format are left out.
+  - Issues, violations, `UnreadEntry` and `bryl::Error` can be serialized
+    but not deserialized.
 
 ### Changed
 
-- **Breaking:** `metro2::AccountType` variants are named after CRRG 2020
-  Exhibit 1. Many were wrong: for example `0A` is `TimeShareLoan` (it was
-  `AutoLease`, which is `3A`), `0C` is `DebtBuyer` (it was
-  `RealEstateJuniorLiens`, which is `5A`), and 70-75 are the government
-  debts (`GovernmentOverpayment` through `GovernmentBenefit`). Every
-  variant now documents its CRRG description.
-- **Breaking:** account types 22 and 23, obsolete since September 2011, and
-  78, which the CRRG does not define, are no longer accepted.
-- **Breaking:** `nacha::Batch` has an `unread_entries` field, empty unless
-  the file was read leniently.
+- **Breaking:** the code enums are `#[non_exhaustive]`: in `bryl-nacha`,
+  `TransactionCode`, `ReturnReasonCode`, `StandardEntryClass` and
+  `ServiceClassCode`; in `bryl-metro2`, all of them. `AccountKind` and
+  `NachaRecord` are too. A `match` on them needs a wildcard arm.
 - **Breaking:** `Entry::return_addendum` and `EntryParams::return_addendum`
-  are replaced by `special_addendum`, holding a `SpecialAddendum` (or
-  `SpecialAddendumParams`): the one addendum a return entry carries in place
-  of type-05 addenda. `Entry::return_addendum()` returns the return addendum,
-  and `EntryParams::builder().special_addendum(..)` accepts a `ReturnParams`.
-- **Breaking:** `TransactionCode::for_entry` returns `Option`: there is no
-  loan debit prenote.
+  are replaced by `special_addendum`. It holds the one addendum a return or
+  notification of change entry carries in place of type-05 addenda: a
+  `SpecialAddendum`, or `SpecialAddendumParams` when writing. Use
+  `Entry::return_addendum()` to get a standard return addendum. The builder's
+  `special_addendum(..)` accepts a `ReturnParams` directly.
+- **Breaking:** `TransactionCode::for_entry` returns `Option`, since a loan
+  debit prenote has no code.
+- **Breaking:** `nacha::Batch` has a new `unread_entries` field, empty unless
+  the file was read leniently.
+- **Breaking:** `metro2::AccountType` variants are named after CRRG 2020
+  Exhibit 1. Many names were wrong, although the codes were right. For
+  example:
+  - `0A` is `TimeShareLoan` (it was named `AutoLease`, which is `3A`);
+  - `0C` is `DebtBuyer` (it was named `RealEstateJuniorLiens`, which is
+    `5A`);
+  - 70–75 are the government debts, `GovernmentOverpayment` through
+    `GovernmentBenefit`.
+
+  Every variant now documents its CRRG description.
+- **Breaking:** `metro2::AccountType` no longer accepts 22 and 23, obsolete
+  since September 2011, or 78, which the CRRG does not define.
+- **Breaking:** `metro2` writers and `File::validate` enforce the new date,
+  header, closed-code and K1 rules above, so records that passed 0.1 may now
+  be rejected.
 - `TransactionCode::is_credit` covers x1–x4 and `is_debit` x5–x9, so
-  zero-dollar remittance codes and the loan debit count toward service
+  zero-dollar remittance codes and the loan debit (55) count toward service
   class checks and control totals.
-- **Breaking:** the code enums of `bryl-nacha` (`TransactionCode`,
-  `ReturnReasonCode`, `StandardEntryClass`, `ServiceClassCode`) and
-  `bryl-metro2`, as well as `AccountKind` and `NachaRecord`, are
-  `#[non_exhaustive]`, so later releases can add codes and record types
-  without a breaking change. A `match` on them needs a wildcard arm.
 
 ## [0.1.1] - 2026-10-08
 
@@ -160,6 +183,7 @@ First release.
 - Internal crates behind `bryl`'s derive macros and date/time patterns,
   re-exported through `bryl`.
 
-[Unreleased]: https://github.com/lendsimple/bryl-rs/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/lendsimple/bryl-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lendsimple/bryl-rs/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/lendsimple/bryl-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lendsimple/bryl-rs/releases/tag/v0.1.0
