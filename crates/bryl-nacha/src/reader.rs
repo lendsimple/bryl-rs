@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 use std::io::BufRead;
 
-use bryl::read::{LineSource, ReadError, ReadErrorKind};
+use bryl::read::{Dispatch, LineSource, ReadError, ReadErrorKind};
 
 use crate::entry::Entry;
 use crate::file::{Batch, File};
@@ -39,7 +39,40 @@ use crate::records::{BatchControl, BatchHeader, FileControl, FileHeader, NachaRe
 /// Lines end with `\n` or `\r\n` and must be exactly 94 characters.
 #[derive(Debug)]
 pub struct Reader<R> {
-    inner: bryl::read::Reader<LineSource<R>, NachaRecord>,
+    inner: bryl::read::Reader<LineSource<R>, Line>,
+}
+
+/// A line as read: its record, or the error decoding an entry detail or
+/// addenda line, with the raw bytes of those lines for lenient reading.
+#[derive(Debug)]
+struct Line {
+    /// The raw bytes of an entry detail or addenda line; empty otherwise.
+    raw: Vec<u8>,
+    record: Result<NachaRecord, bryl::Error>,
+}
+
+impl Dispatch for Line {
+    /// Like [`NachaRecord::dispatch`], but an entry detail or addenda line
+    /// that fails to decode is kept with its error instead of failing.
+    fn dispatch(raw: &[u8]) -> Result<Self, ReadErrorKind> {
+        let entry_line = matches!(raw.first(), Some(b'6' | b'7'));
+        let record = match NachaRecord::dispatch(raw) {
+            Ok(record) => Ok(record),
+            Err(ReadErrorKind::Record(error)) if entry_line => Err(*error),
+            Err(kind) => return Err(kind),
+        };
+        Ok(Self {
+            raw: if entry_line { raw.to_vec() } else { Vec::new() },
+            record,
+        })
+    }
+
+    fn type_name(&self) -> &'static str {
+        match &self.record {
+            Ok(record) => record.type_name(),
+            Err(_) => "UnreadableRecord",
+        }
+    }
 }
 
 impl<R: BufRead> Reader<R> {
@@ -58,13 +91,77 @@ impl<R: BufRead> Reader<R> {
         }
     }
 
+    /// Fails with the decode error if the next line could not be decoded,
+    /// consuming it, as strict reading does for every record.
+    fn reject_unreadable(&mut self) -> Result<(), ReadError> {
+        if !matches!(self.inner.peek()?, Some(Line { record: Err(_), .. })) {
+            return Ok(());
+        }
+        match self.inner.next_record()? {
+            Some(Line {
+                record: Err(error), ..
+            }) => Err(self.inner.error(ReadErrorKind::Record(Box::new(error)))),
+            _ => unreachable!("peeked an unreadable line"),
+        }
+    }
+
+    /// Consumes the next record if `select` accepts it; strict.
+    fn next_if<T>(
+        &mut self,
+        select: impl FnOnce(NachaRecord) -> Result<T, NachaRecord>,
+    ) -> Result<Option<T>, ReadError> {
+        self.reject_unreadable()?;
+        self.inner.next_if(|line| match line.record {
+            Ok(record) => select(record).map_err(|record| Line {
+                raw: line.raw,
+                record: Ok(record),
+            }),
+            Err(error) => Err(Line {
+                raw: line.raw,
+                record: Err(error),
+            }),
+        })
+    }
+
+    /// Consumes the next record, which `select` must accept; strict.
+    fn expect<T>(
+        &mut self,
+        expected: &'static str,
+        select: impl FnOnce(NachaRecord) -> Result<T, NachaRecord>,
+    ) -> Result<T, ReadError> {
+        self.reject_unreadable()?;
+        self.inner.expect(expected, |line| match line.record {
+            Ok(record) => select(record).map_err(|record| Line {
+                raw: line.raw,
+                record: Ok(record),
+            }),
+            Err(error) => Err(Line {
+                raw: line.raw,
+                record: Err(error),
+            }),
+        })
+    }
+
+    /// Consumes and returns the next record; strict.
+    fn next_record(&mut self) -> Result<Option<NachaRecord>, ReadError> {
+        match self.inner.next_record()? {
+            None => Ok(None),
+            Some(Line {
+                record: Ok(record), ..
+            }) => Ok(Some(record)),
+            Some(Line {
+                record: Err(error), ..
+            }) => Err(self.inner.error(ReadErrorKind::Record(Box::new(error)))),
+        }
+    }
+
     /// Reads the file header.
     ///
     /// # Errors
     ///
     /// Returns an error unless the next record is a file header.
     pub fn file_header(&mut self) -> Result<FileHeader, ReadError> {
-        self.inner.expect("FileHeader", |record| match record {
+        self.expect("FileHeader", |record| match record {
             NachaRecord::FileHeader(header) => Ok(header),
             other => Err(other),
         })
@@ -77,7 +174,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Returns an error if the next record cannot be read.
     pub fn next_batch(&mut self) -> Result<Option<BatchHeader>, ReadError> {
-        self.inner.next_if(|record| match record {
+        self.next_if(|record| match record {
             NachaRecord::BatchHeader(header) => Ok(header),
             other => Err(other),
         })
@@ -92,7 +189,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Returns an error if a record cannot be read.
     pub fn next_entry(&mut self) -> Result<Option<Entry>, ReadError> {
-        let Some(detail) = self.inner.next_if(|record| match record {
+        let Some(detail) = self.next_if(|record| match record {
             NachaRecord::EntryDetail(detail) => Ok(detail),
             other => Err(other),
         })?
@@ -105,7 +202,7 @@ impl<R: BufRead> Reader<R> {
             special_addendum: None,
         };
         let has_special = |entry: &Entry| entry.special_addendum.is_some();
-        while let Some(record) = self.inner.next_if(|record| match record {
+        while let Some(record) = self.next_if(|record| match record {
             NachaRecord::Addendum(_) => Ok(record),
             NachaRecord::ReturnAddendum(_)
             | NachaRecord::DishonoredReturnAddendum(_)
@@ -152,7 +249,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Returns an error unless the next record is a batch control.
     pub fn batch_control(&mut self) -> Result<BatchControl, ReadError> {
-        self.inner.expect("BatchControl", |record| match record {
+        self.expect("BatchControl", |record| match record {
             NachaRecord::BatchControl(control) => Ok(control),
             other => Err(other),
         })
@@ -164,7 +261,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Returns an error unless the next record is a file control.
     pub fn file_control(&mut self) -> Result<FileControl, ReadError> {
-        self.inner.expect("FileControl", |record| match record {
+        self.expect("FileControl", |record| match record {
             NachaRecord::FileControl(control) => Ok(control),
             other => Err(other),
         })
@@ -178,11 +275,11 @@ impl<R: BufRead> Reader<R> {
     /// Returns an error if any other record follows.
     pub fn finish(&mut self) -> Result<usize, ReadError> {
         let mut filler = 0;
-        while let Some(record) = self.inner.next_record()? {
+        while let Some(record) = self.next_record()? {
             if record != NachaRecord::Filler {
                 return Err(self.inner.error(ReadErrorKind::UnexpectedRecord {
                     expected: Cow::Borrowed("end of file"),
-                    found: bryl::read::Dispatch::type_name(&record),
+                    found: record.type_name(),
                 }));
             }
             filler += 1;
@@ -222,7 +319,7 @@ impl<R: BufRead> Iterator for Reader<R> {
     type Item = Result<NachaRecord, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        self.next_record().transpose()
     }
 }
 
