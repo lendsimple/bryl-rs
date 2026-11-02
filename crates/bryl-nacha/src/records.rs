@@ -6,8 +6,8 @@ use bryl::{Const, Record};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::codes::{
-    ChangeCode, RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
-    TransactionCode,
+    ChangeCode, ContestedReturnCode, DishonoredReturnCode, RefusedChangeCode, ReturnReasonCode,
+    ServiceClassCode, StandardEntryClass, TransactionCode,
 };
 use crate::types::{FileIdModifier, RoutingNumber};
 
@@ -220,8 +220,8 @@ pub struct Addendum {
 /// exactly one, in place of type-05 addenda.
 ///
 /// The layout is the standard return layout. Dishonored and contested
-/// dishonored returns rearrange the addenda information and are not
-/// supported (see [`ReturnReasonCode`]).
+/// dishonored returns rearrange the addenda information; see
+/// [`DishonoredReturnAddendum`] and [`ContestedReturnAddendum`].
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
@@ -256,6 +256,175 @@ pub struct ReturnAddendum {
     /// detail's.
     #[bryl(numeric(15))]
     pub trace_number: u64,
+}
+
+/// Dishonored return addenda record (`7`, addenda type `99`, dishonored
+/// return code R61, R62 or R67–R70): the ODFI refuses a return it received,
+/// for instance because it came too late. It carries the dishonored return's
+/// trace number, settlement date and reason code.
+#[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[bryl(sanitize(upper), length = 94)]
+#[builder(on(String, into))]
+pub struct DishonoredReturnAddendum {
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), constant = "7")]
+    #[builder(skip)]
+    pub record_type: Const,
+    /// Fixed by the format; stores nothing.
+    #[bryl(numeric(2), constant = 99)]
+    #[builder(skip)]
+    pub addenda_type_code: Const,
+    /// Why the return is dishonored.
+    #[bryl(alpha(3))]
+    pub dishonored_return_code: DishonoredReturnCode,
+    /// Trace number of the original entry.
+    #[bryl(numeric(15))]
+    pub original_entry_trace_number: u64,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(6), reserved)]
+    #[builder(skip)]
+    pub reserved: Const,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    #[bryl(numeric(8))]
+    pub original_receiving_dfi_id: u32,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(3), reserved)]
+    #[builder(skip)]
+    pub reserved_2: Const,
+    /// Trace number of the return being dishonored.
+    #[bryl(numeric(15))]
+    pub return_trace_number: u64,
+    /// Julian settlement date of the return being dishonored.
+    #[bryl(alpha(3))]
+    #[builder(default)]
+    pub return_settlement_date: String,
+    /// Reason code of the return being dishonored, without the `R`: `1` for
+    /// R01. See [`DishonoredReturnAddendum::return_reason`].
+    #[bryl(numeric(2))]
+    pub return_reason_code: u8,
+    /// Free-form information from the ODFI.
+    #[bryl(alpha(21))]
+    #[builder(default)]
+    pub addenda_information: String,
+    /// Trace number of the dishonored return entry itself, the same as its
+    /// entry detail's.
+    #[bryl(numeric(15))]
+    pub trace_number: u64,
+}
+
+impl DishonoredReturnAddendum {
+    /// The reason code of the return being dishonored, or `None` if the two
+    /// digits name no [`ReturnReasonCode`].
+    pub fn return_reason(&self) -> Option<ReturnReasonCode> {
+        return_reason(self.return_reason_code)
+    }
+}
+
+/// Contested dishonored return addenda record (`7`, addenda type `99`,
+/// contested return code R71–R77): the RDFI contests the ODFI's dishonor of
+/// its return. It carries the original return's and the dishonored return's
+/// trace numbers, settlement dates and reason codes.
+#[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[bryl(sanitize(upper), length = 94)]
+#[builder(on(String, into))]
+pub struct ContestedReturnAddendum {
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), constant = "7")]
+    #[builder(skip)]
+    pub record_type: Const,
+    /// Fixed by the format; stores nothing.
+    #[bryl(numeric(2), constant = 99)]
+    #[builder(skip)]
+    pub addenda_type_code: Const,
+    /// Why the dishonor is contested.
+    #[bryl(alpha(3))]
+    pub contested_return_code: ContestedReturnCode,
+    /// Trace number of the original entry.
+    #[bryl(numeric(15))]
+    pub original_entry_trace_number: u64,
+    /// Date the original entry was returned. Two-digit years decode as 20YY.
+    #[bryl(date("YYMMDD"))]
+    pub date_original_entry_returned: NaiveDate,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    #[bryl(numeric(8))]
+    pub original_receiving_dfi_id: u32,
+    /// Julian settlement date of the original entry.
+    #[bryl(alpha(3))]
+    #[builder(default)]
+    pub original_settlement_date: String,
+    /// Trace number of the original return.
+    #[bryl(numeric(15))]
+    pub return_trace_number: u64,
+    /// Julian settlement date of the original return.
+    #[bryl(alpha(3))]
+    #[builder(default)]
+    pub return_settlement_date: String,
+    /// Reason code of the original return, without the `R`: `1` for R01.
+    /// See [`ContestedReturnAddendum::return_reason`].
+    #[bryl(numeric(2))]
+    pub return_reason_code: u8,
+    /// Trace number of the dishonored return.
+    #[bryl(numeric(15))]
+    pub dishonored_return_trace_number: u64,
+    /// Julian settlement date of the dishonored return.
+    #[bryl(alpha(3))]
+    #[builder(default)]
+    pub dishonored_return_settlement_date: String,
+    /// Dishonored return code, without the `R`: `68` for R68. See
+    /// [`ContestedReturnAddendum::dishonored_return_reason`].
+    #[bryl(numeric(2))]
+    pub dishonored_return_reason_code: u8,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), reserved)]
+    #[builder(skip)]
+    pub reserved: Const,
+    /// Trace number of the contested dishonored return entry itself, the
+    /// same as its entry detail's.
+    #[bryl(numeric(15))]
+    pub trace_number: u64,
+}
+
+impl ContestedReturnAddendum {
+    /// The reason code of the original return, or `None` if the two digits
+    /// name no [`ReturnReasonCode`].
+    pub fn return_reason(&self) -> Option<ReturnReasonCode> {
+        return_reason(self.return_reason_code)
+    }
+
+    /// The dishonored return code, or `None` if the two digits name no
+    /// [`DishonoredReturnCode`].
+    pub fn dishonored_return_reason(&self) -> Option<DishonoredReturnCode> {
+        DishonoredReturnCode::from_code(&format!("R{:02}", self.dishonored_return_reason_code))
+    }
+}
+
+/// A two-digit return reason code (`1` for R01) as a [`ReturnReasonCode`].
+fn return_reason(code: u8) -> Option<ReturnReasonCode> {
+    ReturnReasonCode::from_code(&format!("R{code:02}"))
+}
+
+/// Which type-99 layout a return addenda record uses, chosen by its code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReturnLayout {
+    /// [`ReturnAddendum`].
+    Standard,
+    /// [`DishonoredReturnAddendum`]: R6x and R70.
+    Dishonored,
+    /// [`ContestedReturnAddendum`]: R71–R79.
+    Contested,
+}
+
+/// The layout of a type-99 addenda record. Codes R6x and R70 are dishonored
+/// returns and R71–R79 contested ones; unassigned codes in those ranges then
+/// fail to decode as unknown codes.
+pub(crate) fn return_layout(raw: &[u8]) -> ReturnLayout {
+    match raw.get(3..6) {
+        Some([b'R', b'6', _] | b"R70") => ReturnLayout::Dishonored,
+        Some([b'R', b'7', _]) => ReturnLayout::Contested,
+        _ => ReturnLayout::Standard,
+    }
 }
 
 /// Notification of change addenda record (`7`, addenda type `98`). An entry
@@ -449,6 +618,11 @@ pub enum NachaRecord {
     Addendum(Addendum),
     /// `7`, addenda type `99`
     ReturnAddendum(ReturnAddendum),
+    /// `7`, addenda type `99` with a dishonored return code (R61, R62,
+    /// R67–R70)
+    DishonoredReturnAddendum(DishonoredReturnAddendum),
+    /// `7`, addenda type `99` with a contested return code (R71–R77)
+    ContestedReturnAddendum(ContestedReturnAddendum),
     /// `7`, addenda type `98`
     NocAddendum(NocAddendum),
     /// `7`, addenda type `98` with a refused change code (C61–C69)
@@ -475,9 +649,15 @@ impl Dispatch for NachaRecord {
             Some(b'1') => Self::FileHeader(FileHeader::decode_exact(raw)?),
             Some(b'5') => Self::BatchHeader(BatchHeader::decode_exact(raw)?),
             Some(b'6') => Self::EntryDetail(EntryDetail::decode_exact(raw)?),
-            Some(b'7') if raw.get(1..3) == Some(b"99") => {
-                Self::ReturnAddendum(ReturnAddendum::decode_exact(raw)?)
-            }
+            Some(b'7') if raw.get(1..3) == Some(b"99") => match return_layout(raw) {
+                ReturnLayout::Standard => Self::ReturnAddendum(ReturnAddendum::decode_exact(raw)?),
+                ReturnLayout::Dishonored => {
+                    Self::DishonoredReturnAddendum(DishonoredReturnAddendum::decode_exact(raw)?)
+                }
+                ReturnLayout::Contested => {
+                    Self::ContestedReturnAddendum(ContestedReturnAddendum::decode_exact(raw)?)
+                }
+            },
             Some(b'7') if raw.get(1..3) == Some(b"98") && is_refused_noc(raw) => {
                 Self::RefusedNocAddendum(RefusedNocAddendum::decode_exact(raw)?)
             }
@@ -501,6 +681,8 @@ impl Dispatch for NachaRecord {
             Self::EntryDetail(_) => EntryDetail::NAME,
             Self::Addendum(_) => Addendum::NAME,
             Self::ReturnAddendum(_) => ReturnAddendum::NAME,
+            Self::DishonoredReturnAddendum(_) => DishonoredReturnAddendum::NAME,
+            Self::ContestedReturnAddendum(_) => ContestedReturnAddendum::NAME,
             Self::NocAddendum(_) => NocAddendum::NAME,
             Self::RefusedNocAddendum(_) => RefusedNocAddendum::NAME,
             Self::BatchControl(_) => BatchControl::NAME,

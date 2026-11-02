@@ -186,8 +186,10 @@
 //! - **Loan debits** ([`TransactionCode::LoanDebit`], 55) appear only in a
 //!   reversal batch.
 //! - **Returns.** A return entry (transaction code x1 or x6) carries exactly
-//!   one [`ReturnAddendum`] whose trace number is its own, and no other
-//!   addenda; only R14 and R15 returns may give a date of death.
+//!   one return addendum (standard, dishonored or contested) whose trace
+//!   number is its own, and no other addenda; only R14 and R15 returns may
+//!   give a date of death, and the two-digit reason codes of dishonored and
+//!   contested returns must name known codes.
 //! - **Notifications of change.** Every entry in a COR batch has a zero
 //!   amount, a return transaction code and exactly one [`NocAddendum`] or
 //!   [`RefusedNocAddendum`] whose trace number is its own, and no other
@@ -323,6 +325,16 @@
 //! To write a return, give [`EntryParams::special_addendum`] a
 //! [`ReturnParams`]; the writer fills in the addendum's trace number.
 //!
+//! An ODFI that receives a return it considers untimely or wrong dishonors
+//! it with a [`DishonoredReturnAddendum`] ([`DishonoredReturnCode`] R61, R62,
+//! R67–R70), and the RDFI can contest the dishonor with a
+//! [`ContestedReturnAddendum`] ([`ContestedReturnCode`] R71–R77). Both are
+//! type-99 addenda with their own layouts; the reader picks the layout from
+//! the code, and [`Entry::dishonored_return_addendum`] and
+//! [`Entry::contested_return_addendum`] return them. Their two-digit reason
+//! codes convert with `return_reason()`. Write them with
+//! [`DishonoredReturnParams`] and [`ContestedReturnParams`].
+//!
 //! # Notifications of change
 //!
 //! A receiving bank that posts an entry despite wrong details (an outdated
@@ -419,8 +431,6 @@
 //!
 //! - Type 02 addenda (MTE, POS, SHR). Entries of these classes cannot carry
 //!   their required addenda, and reading a file that contains them fails.
-//! - Dishonored and contested dishonored returns (R61–R77), whose type-99
-//!   addenda use another layout; reading them fails.
 //! - International entries (IAT), their addenda types 10–18 and their
 //!   returns (R80–R85).
 //!
@@ -468,23 +478,25 @@ mod writer;
 /// Text normalization applied when writing; see [`Writer::sanitize`].
 pub use bryl::Sanitize;
 pub use codes::{
-    AccountKind, ChangeCode, REVERSAL, RefusedChangeCode, ReturnReasonCode, ServiceClassCode,
-    StandardEntryClass, TransactionCode,
+    AccountKind, ChangeCode, ContestedReturnCode, DishonoredReturnCode, REVERSAL,
+    RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
 };
 pub use entry::{Entry, SpecialAddendum};
 pub use error::Error;
 pub use file::{Batch, File};
 pub use reader::{Entries, Reader};
 pub use records::{
-    Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader, NachaRecord,
-    NocAddendum, RECORD_LENGTH, RefusedNocAddendum, ReturnAddendum,
+    Addendum, BatchControl, BatchHeader, ContestedReturnAddendum, DishonoredReturnAddendum,
+    EntryDetail, FILLER, FileControl, FileHeader, NachaRecord, NocAddendum, RECORD_LENGTH,
+    RefusedNocAddendum, ReturnAddendum,
 };
 pub use totals::{HASH_MODULUS, Totals};
 pub use types::{FileIdModifier, FileIdModifierError, RoutingNumber, RoutingNumberError};
 pub use validate::{Issue, IssueKind};
 pub use writer::{
-    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, NocParams,
-    RefusedNocParams, ReturnParams, SpecialAddendumParams, Writer,
+    BatchParams, BatchWriter, ContestedReturnParams, DishonoredReturnParams, EntryParams,
+    FileParams, FileWriter, LineEnding, NocParams, RefusedNocParams, ReturnParams,
+    SpecialAddendumParams, Writer,
 };
 
 /// Runs the code in README.md as doctests.

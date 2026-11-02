@@ -197,6 +197,15 @@ pub enum IssueKind {
         /// The entry's trace number.
         expected: u64,
     },
+    /// A dishonored or contested return's two-digit reason code (positions
+    /// 57-58, or 77-78 for the dishonored return code) names no known code.
+    #[error("{field} {code:02} is not a known return reason code")]
+    UnknownReturnReasonCode {
+        /// Field name.
+        field: &'static str,
+        /// The two digits.
+        code: u8,
+    },
     /// A date of death with a return reason other than R14 or R15.
     #[error("a date of death is only allowed with R14 and R15, got {return_reason_code}")]
     DateOfDeath {
@@ -317,7 +326,11 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
         if code.is_return() {
             return_issues(entry, &mut issues);
         } else {
-            if entry.return_addendum().is_some() {
+            if entry
+                .special_addendum
+                .as_ref()
+                .is_some_and(SpecialAddendum::is_return)
+            {
                 issues.push(IssueKind::UnexpectedReturnAddendum {
                     transaction_code: code,
                 });
@@ -366,9 +379,11 @@ fn noc_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
     }
     match &entry.special_addendum {
         None => issues.push(IssueKind::MissingNocAddendum),
-        Some(SpecialAddendum::Return(_)) => issues.push(IssueKind::UnexpectedReturnAddendum {
-            transaction_code: detail.transaction_code,
-        }),
+        Some(addendum) if addendum.is_return() => {
+            issues.push(IssueKind::UnexpectedReturnAddendum {
+                transaction_code: detail.transaction_code,
+            });
+        }
         Some(addendum) => {
             if addendum.trace_number() != detail.trace_number {
                 issues.push(IssueKind::NocTraceNumber {
@@ -387,21 +402,49 @@ fn return_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
             count: entry.addenda.len(),
         });
     }
-    let Some(addendum) = entry.return_addendum() else {
+    let Some(addendum) = entry.special_addendum.as_ref().filter(|a| a.is_return()) else {
         issues.push(IssueKind::MissingReturnAddendum);
         return;
     };
-    if addendum.trace_number != entry.detail.trace_number {
+    if addendum.trace_number() != entry.detail.trace_number {
         issues.push(IssueKind::ReturnTraceNumber {
-            recorded: addendum.trace_number,
+            recorded: addendum.trace_number(),
             expected: entry.detail.trace_number,
         });
     }
-    let code = addendum.return_reason_code;
-    if addendum.date_of_death.is_some() && !code.allows_date_of_death() {
-        issues.push(IssueKind::DateOfDeath {
-            return_reason_code: code,
-        });
+    match addendum {
+        SpecialAddendum::Return(addendum) => {
+            let code = addendum.return_reason_code;
+            if addendum.date_of_death.is_some() && !code.allows_date_of_death() {
+                issues.push(IssueKind::DateOfDeath {
+                    return_reason_code: code,
+                });
+            }
+        }
+        SpecialAddendum::Dishonored(addendum) => {
+            if addendum.return_reason().is_none() {
+                issues.push(IssueKind::UnknownReturnReasonCode {
+                    field: "return_reason_code",
+                    code: addendum.return_reason_code,
+                });
+            }
+        }
+        SpecialAddendum::Contested(addendum) => {
+            if addendum.return_reason().is_none() {
+                issues.push(IssueKind::UnknownReturnReasonCode {
+                    field: "return_reason_code",
+                    code: addendum.return_reason_code,
+                });
+            }
+            if addendum.dishonored_return_reason().is_none() {
+                issues.push(IssueKind::UnknownReturnReasonCode {
+                    field: "dishonored_return_reason_code",
+                    code: addendum.dishonored_return_reason_code,
+                });
+            }
+        }
+        // Not returns; filtered out above.
+        SpecialAddendum::Noc(_) | SpecialAddendum::RefusedNoc(_) => {}
     }
 }
 

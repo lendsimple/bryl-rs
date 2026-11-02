@@ -9,10 +9,11 @@ use bryl::Record;
 use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    AccountKind, Addendum, BatchControl, BatchHeader, ChangeCode, Entry, EntryDetail, FileControl,
-    FileHeader, FileIdModifier, NachaRecord, NocAddendum, RefusedChangeCode, RefusedNocAddendum,
-    ReturnAddendum, ReturnReasonCode, RoutingNumber, RoutingNumberError, ServiceClassCode,
-    SpecialAddendum, StandardEntryClass, TransactionCode,
+    AccountKind, Addendum, BatchControl, BatchHeader, ChangeCode, ContestedReturnAddendum,
+    ContestedReturnCode, DishonoredReturnAddendum, DishonoredReturnCode, Entry, EntryDetail,
+    FileControl, FileHeader, FileIdModifier, NachaRecord, NocAddendum, RefusedChangeCode,
+    RefusedNocAddendum, ReturnAddendum, ReturnReasonCode, RoutingNumber, RoutingNumberError,
+    ServiceClassCode, SpecialAddendum, StandardEntryClass, TransactionCode,
 };
 
 fn file_header() -> FileHeader {
@@ -104,6 +105,52 @@ fn refused_noc_line() -> String {
         "0000007",
         " ".repeat(5),
         "091000010000009",
+    );
+    assert_eq!(line.len(), 94);
+    line
+}
+
+/// An R68 (untimely) dishonored return of an R01 return, laid out by hand:
+/// positions 1-6 `799R68`, 7-21 original trace, 22-27 reserved, 28-35
+/// original RDFI, 36-38 reserved, 39-53 return trace, 54-56 return
+/// settlement date, 57-58 return reason code, 59-79 addenda information,
+/// 80-94 trace number.
+fn dishonored_line() -> String {
+    let line = format!(
+        "799R68{}{}{}{}{}{}{}{:<21}{}",
+        "091000010000001",
+        " ".repeat(6),
+        "09100001",
+        " ".repeat(3),
+        "021000020000004",
+        "152",
+        "01",
+        "UNTIMELY",
+        "091000010000009",
+    );
+    assert_eq!(line.len(), 94);
+    line
+}
+
+/// An R73 (timely original return) contest of that dishonor, laid out by
+/// hand: 22-27 the date the original entry was returned, 36-38 the
+/// original settlement date, 59-73 the dishonored return's trace, 74-76 its
+/// settlement date, 77-78 its code, 79 reserved.
+fn contested_line() -> String {
+    let line = format!(
+        "799R73{}{}{}{}{}{}{}{}{}{}{}{}",
+        "091000010000001",
+        "230610",
+        "09100001",
+        "150",
+        "021000020000004",
+        "152",
+        "01",
+        "091000010000009",
+        "155",
+        "68",
+        " ",
+        "021000020000011",
     );
     assert_eq!(line.len(), 94);
     line
@@ -330,12 +377,100 @@ mod records {
 
     #[test]
     fn unsupported_return_reason_is_rejected() {
-        // R61 (misrouted return) is a dishonored return, with another layout.
+        // R61 (misrouted return) is a dishonored return code, with its own
+        // layout; the standard layout does not accept it.
         let line = return_addendum(None)
             .encode()
             .unwrap()
             .replacen("R15", "R61", 1);
         assert!(ReturnAddendum::decode_exact(line.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn dishonored_return_addendum_layout() {
+        let line = dishonored_line();
+        let addendum = DishonoredReturnAddendum::decode_exact(line.as_bytes()).unwrap();
+        assert_eq!(
+            addendum.dishonored_return_code,
+            DishonoredReturnCode::UntimelyReturn
+        );
+        assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
+        assert_eq!(addendum.original_receiving_dfi_id, 9_100_001);
+        assert_eq!(addendum.return_trace_number, 21_000_020_000_004);
+        assert_eq!(addendum.return_settlement_date, "152");
+        assert_eq!(addendum.return_reason_code, 1);
+        assert_eq!(
+            addendum.return_reason(),
+            Some(ReturnReasonCode::InsufficientFunds)
+        );
+        assert_eq!(addendum.addenda_information, "UNTIMELY");
+        assert_eq!(addendum.trace_number, 91_000_010_000_009);
+        assert_eq!(addendum.encode().unwrap(), line);
+    }
+
+    #[test]
+    fn contested_return_addendum_layout() {
+        let line = contested_line();
+        let addendum = ContestedReturnAddendum::decode_exact(line.as_bytes()).unwrap();
+        assert_eq!(
+            addendum.contested_return_code,
+            ContestedReturnCode::TimelyOriginalReturn
+        );
+        assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
+        assert_eq!(
+            addendum.date_original_entry_returned,
+            NaiveDate::from_ymd_opt(2023, 6, 10).unwrap()
+        );
+        assert_eq!(addendum.original_receiving_dfi_id, 9_100_001);
+        assert_eq!(addendum.original_settlement_date, "150");
+        assert_eq!(addendum.return_trace_number, 21_000_020_000_004);
+        assert_eq!(addendum.return_settlement_date, "152");
+        assert_eq!(
+            addendum.return_reason(),
+            Some(ReturnReasonCode::InsufficientFunds)
+        );
+        assert_eq!(addendum.dishonored_return_trace_number, 91_000_010_000_009);
+        assert_eq!(addendum.dishonored_return_settlement_date, "155");
+        assert_eq!(
+            addendum.dishonored_return_reason(),
+            Some(DishonoredReturnCode::UntimelyReturn)
+        );
+        assert_eq!(addendum.trace_number, 21_000_020_000_011);
+        assert_eq!(addendum.encode().unwrap(), line);
+    }
+
+    #[test]
+    fn two_digit_return_reasons() {
+        let line = dishonored_line();
+        let mut addendum = DishonoredReturnAddendum::decode_exact(line.as_bytes()).unwrap();
+        addendum.return_reason_code = 0;
+        assert_eq!(addendum.return_reason(), None);
+        // Dishonored codes are not return reasons.
+        addendum.return_reason_code = 68;
+        assert_eq!(addendum.return_reason(), None);
+        addendum.return_reason_code = 90;
+        assert_eq!(
+            addendum.return_reason(),
+            Some(ReturnReasonCode::SanctionsCompliance)
+        );
+    }
+
+    #[test]
+    fn dispatch_by_return_code() {
+        use bryl::read::Dispatch;
+        assert!(matches!(
+            NachaRecord::dispatch(dishonored_line().as_bytes()).unwrap(),
+            NachaRecord::DishonoredReturnAddendum(_)
+        ));
+        assert!(matches!(
+            NachaRecord::dispatch(contested_line().as_bytes()).unwrap(),
+            NachaRecord::ContestedReturnAddendum(_)
+        ));
+        // Retired (R63) and unassigned (R78) codes in those ranges.
+        for code in ["R63", "R66", "R78"] {
+            let line = dishonored_line().replacen("R68", code, 1);
+            assert!(NachaRecord::dispatch(line.as_bytes()).is_err(), "{code}");
+        }
     }
 
     #[test]
@@ -462,6 +597,8 @@ mod codes {
         assert_eq!(TransactionCode::ALL.len(), 30);
         assert_eq!(ChangeCode::ALL.len(), 11);
         assert_eq!(RefusedChangeCode::ALL.len(), 9);
+        assert_eq!(DishonoredReturnCode::ALL.len(), 6);
+        assert_eq!(ContestedReturnCode::ALL.len(), 7);
     }
 
     #[test]
@@ -998,6 +1135,34 @@ mod entry {
             assert_eq!(decoded, entry);
             assert!(decoded.noc_addendum().is_some() || decoded.refused_noc_addendum().is_some());
             assert!(decoded.return_addendum().is_none());
+        }
+    }
+
+    #[test]
+    fn encode_decode_dishonored_and_contested_returns() {
+        let dishonored =
+            DishonoredReturnAddendum::decode_exact(dishonored_line().as_bytes()).unwrap();
+        let contested = ContestedReturnAddendum::decode_exact(contested_line().as_bytes()).unwrap();
+        for special in [
+            SpecialAddendum::from(dishonored),
+            SpecialAddendum::from(contested),
+        ] {
+            assert!(special.is_return());
+            let entry = Entry {
+                detail: EntryDetail {
+                    addenda_record_indicator: 1,
+                    ..entry_detail(TransactionCode::CheckingReturnedDebit)
+                },
+                addenda: vec![],
+                special_addendum: Some(special),
+            };
+            let decoded = Entry::decode(entry.encode().unwrap().as_bytes()).unwrap();
+            assert_eq!(decoded, entry);
+            assert!(decoded.return_addendum().is_none());
+            assert!(
+                decoded.dishonored_return_addendum().is_some()
+                    || decoded.contested_return_addendum().is_some()
+            );
         }
     }
 

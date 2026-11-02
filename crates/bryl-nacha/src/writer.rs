@@ -7,14 +7,14 @@ use bryl::{EncodeCx, Record, Sanitize};
 use chrono::{NaiveDate, NaiveDateTime};
 
 use crate::codes::{
-    ChangeCode, RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
-    TransactionCode,
+    ChangeCode, ContestedReturnCode, DishonoredReturnCode, RefusedChangeCode, ReturnReasonCode,
+    ServiceClassCode, StandardEntryClass, TransactionCode,
 };
 use crate::entry::{Entry, SpecialAddendum};
 use crate::error::Error;
 use crate::records::{
-    Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader, NocAddendum,
-    RefusedNocAddendum, ReturnAddendum,
+    Addendum, BatchControl, BatchHeader, ContestedReturnAddendum, DishonoredReturnAddendum,
+    EntryDetail, FILLER, FileControl, FileHeader, NocAddendum, RefusedNocAddendum, ReturnAddendum,
 };
 use crate::totals::Totals;
 use crate::types::{FileIdModifier, RoutingNumber};
@@ -215,8 +215,9 @@ pub struct EntryParams {
     #[builder(default)]
     pub addenda: Vec<String>,
     /// For a return entry, its type-99 addendum; for a COR entry, its type-98
-    /// addendum. Accepts a [`ReturnParams`], [`NocParams`] or
-    /// [`RefusedNocParams`] directly.
+    /// addendum. Accepts a [`ReturnParams`], [`DishonoredReturnParams`],
+    /// [`ContestedReturnParams`], [`NocParams`] or [`RefusedNocParams`]
+    /// directly.
     #[builder(into)]
     pub special_addendum: Option<SpecialAddendumParams>,
 }
@@ -229,6 +230,10 @@ pub struct EntryParams {
 pub enum SpecialAddendumParams {
     /// A return (addenda type 99).
     Return(ReturnParams),
+    /// A dishonored return (addenda type 99).
+    Dishonored(DishonoredReturnParams),
+    /// A contested dishonored return (addenda type 99).
+    Contested(ContestedReturnParams),
     /// A notification of change (addenda type 98).
     Noc(NocParams),
     /// A refused notification of change (addenda type 98).
@@ -238,6 +243,18 @@ pub enum SpecialAddendumParams {
 impl From<ReturnParams> for SpecialAddendumParams {
     fn from(params: ReturnParams) -> Self {
         Self::Return(params)
+    }
+}
+
+impl From<DishonoredReturnParams> for SpecialAddendumParams {
+    fn from(params: DishonoredReturnParams) -> Self {
+        Self::Dishonored(params)
+    }
+}
+
+impl From<ContestedReturnParams> for SpecialAddendumParams {
+    fn from(params: ContestedReturnParams) -> Self {
+        Self::Contested(params)
     }
 }
 
@@ -251,6 +268,63 @@ impl From<RefusedNocParams> for SpecialAddendumParams {
     fn from(params: RefusedNocParams) -> Self {
         Self::RefusedNoc(params)
     }
+}
+
+/// Dishonored return addendum values. The addendum's trace number is the
+/// dishonored return entry's.
+#[derive(Builder, Debug, Clone, PartialEq, Eq)]
+#[builder(on(String, into))]
+pub struct DishonoredReturnParams {
+    /// Why the return is dishonored.
+    pub dishonored_return_code: DishonoredReturnCode,
+    /// Trace number of the original entry.
+    pub original_entry_trace_number: u64,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    pub original_receiving_dfi_id: u32,
+    /// Trace number of the return being dishonored.
+    pub return_trace_number: u64,
+    /// Julian settlement date of the return being dishonored.
+    #[builder(default)]
+    pub return_settlement_date: String,
+    /// Reason code of the return being dishonored, without the `R`.
+    pub return_reason_code: u8,
+    /// Free-form information.
+    #[builder(default)]
+    pub addenda_information: String,
+}
+
+/// Contested dishonored return addendum values. The addendum's trace number
+/// is the contested dishonored return entry's.
+#[derive(Builder, Debug, Clone, PartialEq, Eq)]
+#[builder(on(String, into))]
+pub struct ContestedReturnParams {
+    /// Why the dishonor is contested.
+    pub contested_return_code: ContestedReturnCode,
+    /// Trace number of the original entry.
+    pub original_entry_trace_number: u64,
+    /// Date the original entry was returned.
+    pub date_original_entry_returned: NaiveDate,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    pub original_receiving_dfi_id: u32,
+    /// Julian settlement date of the original entry.
+    #[builder(default)]
+    pub original_settlement_date: String,
+    /// Trace number of the original return.
+    pub return_trace_number: u64,
+    /// Julian settlement date of the original return.
+    #[builder(default)]
+    pub return_settlement_date: String,
+    /// Reason code of the original return, without the `R`.
+    pub return_reason_code: u8,
+    /// Trace number of the dishonored return.
+    pub dishonored_return_trace_number: u64,
+    /// Julian settlement date of the dishonored return.
+    #[builder(default)]
+    pub dishonored_return_settlement_date: String,
+    /// Dishonored return code, without the `R`.
+    pub dishonored_return_reason_code: u8,
 }
 
 /// Notification of change addendum values. The addendum's trace number is
@@ -578,6 +652,8 @@ impl<W: Write> BatchWriter<'_, '_, W> {
         }
         match &entry.special_addendum {
             Some(SpecialAddendum::Return(addendum)) => self.file.encode(addendum, &mut buf)?,
+            Some(SpecialAddendum::Dishonored(addendum)) => self.file.encode(addendum, &mut buf)?,
+            Some(SpecialAddendum::Contested(addendum)) => self.file.encode(addendum, &mut buf)?,
             Some(SpecialAddendum::Noc(addendum)) => self.file.encode(addendum, &mut buf)?,
             Some(SpecialAddendum::RefusedNoc(addendum)) => self.file.encode(addendum, &mut buf)?,
             None => {}
@@ -623,6 +699,32 @@ fn special_addendum(params: SpecialAddendumParams, trace_number: u64) -> Special
             .maybe_date_of_death(params.date_of_death)
             .original_receiving_dfi_id(params.original_receiving_dfi_id)
             .addenda_information(params.addenda_information)
+            .trace_number(trace_number)
+            .build()
+            .into(),
+        SpecialAddendumParams::Dishonored(params) => DishonoredReturnAddendum::builder()
+            .dishonored_return_code(params.dishonored_return_code)
+            .original_entry_trace_number(params.original_entry_trace_number)
+            .original_receiving_dfi_id(params.original_receiving_dfi_id)
+            .return_trace_number(params.return_trace_number)
+            .return_settlement_date(params.return_settlement_date)
+            .return_reason_code(params.return_reason_code)
+            .addenda_information(params.addenda_information)
+            .trace_number(trace_number)
+            .build()
+            .into(),
+        SpecialAddendumParams::Contested(params) => ContestedReturnAddendum::builder()
+            .contested_return_code(params.contested_return_code)
+            .original_entry_trace_number(params.original_entry_trace_number)
+            .date_original_entry_returned(params.date_original_entry_returned)
+            .original_receiving_dfi_id(params.original_receiving_dfi_id)
+            .original_settlement_date(params.original_settlement_date)
+            .return_trace_number(params.return_trace_number)
+            .return_settlement_date(params.return_settlement_date)
+            .return_reason_code(params.return_reason_code)
+            .dishonored_return_trace_number(params.dishonored_return_trace_number)
+            .dishonored_return_settlement_date(params.dishonored_return_settlement_date)
+            .dishonored_return_reason_code(params.dishonored_return_reason_code)
             .trace_number(trace_number)
             .build()
             .into(),

@@ -303,9 +303,10 @@ pub enum TransactionCode {
 /// Return reason code, carried by a [`ReturnAddendum`](crate::ReturnAddendum).
 ///
 /// Covers the return codes R01–R53 (titles as in NACHA's current return code
-/// table) and R90. Dishonored and contested dishonored returns (R61–R77) use
-/// a different addendum layout and international returns (R80–R85) need IAT,
-/// so neither is supported; reading a file that contains them fails.
+/// table) and R90. Dishonored and contested dishonored returns use their own
+/// addendum layouts and codes ([`DishonoredReturnCode`],
+/// [`ContestedReturnCode`]). International returns (R80–R85) need IAT and are
+/// not supported; reading a file that contains them fails.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ReturnReasonCode {
@@ -476,6 +477,66 @@ impl ReturnReasonCode {
             Self::RepresentativePayeeDeceased | Self::AccountHolderDeceased
         )
     }
+}
+
+/// Dishonored return code, carried by a
+/// [`DishonoredReturnAddendum`](crate::DishonoredReturnAddendum): why the
+/// ODFI refuses a return it received (codes and titles as in moov-io/ach;
+/// R63–R66 are retired).
+#[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DishonoredReturnCode {
+    /// `R61`: Misrouted return: the RDFI put the wrong routing number in the
+    /// return.
+    #[code("R61")]
+    MisroutedReturn,
+    /// `R62`: Return of an erroneous or reversing debit.
+    #[code("R62")]
+    ErroneousOrReversingDebit,
+    /// `R67`: Duplicate return.
+    #[code("R67")]
+    DuplicateReturn,
+    /// `R68`: Untimely return: the return was not sent in time.
+    #[code("R68")]
+    UntimelyReturn,
+    /// `R69`: Field errors: one or more fields of the return are incorrect.
+    #[code("R69")]
+    FieldErrors,
+    /// `R70`: Permissible return entry not accepted, or return not requested
+    /// by the ODFI.
+    #[code("R70")]
+    PermissibleReturnNotAccepted,
+}
+
+/// Contested dishonored return code, carried by a
+/// [`ContestedReturnAddendum`](crate::ContestedReturnAddendum): why the RDFI
+/// contests the ODFI's dishonor of its return (codes and titles as in
+/// moov-io/ach).
+#[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ContestedReturnCode {
+    /// `R71`: Misrouted dishonored return.
+    #[code("R71")]
+    MisroutedDishonoredReturn,
+    /// `R72`: Untimely dishonored return.
+    #[code("R72")]
+    UntimelyDishonoredReturn,
+    /// `R73`: Timely original return: the RDFI certifies the return was sent
+    /// in time.
+    #[code("R73")]
+    TimelyOriginalReturn,
+    /// `R74`: Corrected return, fixing a return dishonored with R69.
+    #[code("R74")]
+    CorrectedReturn,
+    /// `R75`: Return not a duplicate.
+    #[code("R75")]
+    ReturnNotDuplicate,
+    /// `R76`: No errors found in the original return.
+    #[code("R76")]
+    NoErrorsFound,
+    /// `R77`: Non-acceptance of an R62 dishonored return.
+    #[code("R77")]
+    NonAcceptanceOfR62,
 }
 
 /// Change code of a notification of change, carried by a

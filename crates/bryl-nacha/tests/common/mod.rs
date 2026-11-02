@@ -4,7 +4,8 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use nacha::{
-    BatchParams, ChangeCode, EntryDetail, EntryParams, FileParams, NocParams, ReturnParams,
+    BatchParams, ChangeCode, ContestedReturnCode, ContestedReturnParams, DishonoredReturnCode,
+    DishonoredReturnParams, EntryDetail, EntryParams, FileParams, NocParams, ReturnParams,
     ReturnReasonCode, RoutingNumber, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 
@@ -120,6 +121,36 @@ pub fn cor_batch_params() -> BatchParams {
     }
 }
 
+/// A dishonor of an R01 return (trace 021000020000004) of the entry sent
+/// with trace number 091000010000001.
+pub fn dishonored_params(code: DishonoredReturnCode) -> DishonoredReturnParams {
+    DishonoredReturnParams::builder()
+        .dishonored_return_code(code)
+        .original_entry_trace_number(91_000_010_000_001)
+        .original_receiving_dfi_id(9_100_001)
+        .return_trace_number(21_000_020_000_004)
+        .return_settlement_date("152")
+        .return_reason_code(1)
+        .build()
+}
+
+/// A contest of an R68 dishonor (trace 091000010000009) of that return.
+pub fn contested_params(code: ContestedReturnCode) -> ContestedReturnParams {
+    ContestedReturnParams::builder()
+        .contested_return_code(code)
+        .original_entry_trace_number(91_000_010_000_001)
+        .date_original_entry_returned(NaiveDate::from_ymd_opt(2023, 6, 10).unwrap())
+        .original_receiving_dfi_id(9_100_001)
+        .original_settlement_date("150")
+        .return_trace_number(21_000_020_000_004)
+        .return_settlement_date("152")
+        .return_reason_code(1)
+        .dishonored_return_trace_number(91_000_010_000_009)
+        .dishonored_return_settlement_date("155")
+        .dishonored_return_reason_code(68)
+        .build()
+}
+
 /// A return of a checking debit.
 pub fn return_entry_params(return_reason_code: ReturnReasonCode) -> EntryParams {
     EntryParams {
@@ -171,6 +202,25 @@ pub fn noc_file() -> String {
     let mut file = writer.begin_file(file_params()).unwrap();
     let mut batch = file.begin_batch(cor_batch_params()).unwrap();
     batch.entry(noc_entry_params()).unwrap();
+    batch.finish().unwrap();
+    file.finish().unwrap();
+    String::from_utf8(writer.into_inner()).unwrap()
+}
+
+/// Writes a file with one debits-only batch holding an R68 dishonored
+/// return.
+pub fn dishonored_file() -> String {
+    let mut writer = Writer::new(Vec::new());
+    let mut file = writer.begin_file(file_params()).unwrap();
+    let mut batch = file
+        .begin_batch(batch_params(ServiceClassCode::DebitsOnly))
+        .unwrap();
+    batch
+        .entry(EntryParams {
+            special_addendum: Some(dishonored_params(DishonoredReturnCode::UntimelyReturn).into()),
+            ..entry_params(TransactionCode::CheckingReturnedDebit, 2500, &[])
+        })
+        .unwrap();
     batch.finish().unwrap();
     file.finish().unwrap();
     String::from_utf8(writer.into_inner()).unwrap()

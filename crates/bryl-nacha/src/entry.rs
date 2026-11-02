@@ -1,7 +1,8 @@
 use bryl::Record;
 
 use crate::records::{
-    Addendum, EntryDetail, NocAddendum, RefusedNocAddendum, ReturnAddendum, is_refused_noc,
+    Addendum, ContestedReturnAddendum, DishonoredReturnAddendum, EntryDetail, NocAddendum,
+    RefusedNocAddendum, ReturnAddendum, ReturnLayout, is_refused_noc, return_layout,
 };
 
 /// An entry detail record with its addenda.
@@ -23,6 +24,10 @@ pub struct Entry {
 pub enum SpecialAddendum {
     /// A return (addenda type 99).
     Return(ReturnAddendum),
+    /// A dishonored return (addenda type 99).
+    Dishonored(DishonoredReturnAddendum),
+    /// A contested dishonored return (addenda type 99).
+    Contested(ContestedReturnAddendum),
     /// A notification of change (addenda type 98).
     Noc(NocAddendum),
     /// A refused notification of change (addenda type 98).
@@ -38,6 +43,8 @@ impl SpecialAddendum {
     pub fn encode(&self) -> Result<String, bryl::Error> {
         match self {
             Self::Return(addendum) => addendum.encode(),
+            Self::Dishonored(addendum) => addendum.encode(),
+            Self::Contested(addendum) => addendum.encode(),
             Self::Noc(addendum) => addendum.encode(),
             Self::RefusedNoc(addendum) => addendum.encode(),
         }
@@ -47,9 +54,19 @@ impl SpecialAddendum {
     pub const fn trace_number(&self) -> u64 {
         match self {
             Self::Return(addendum) => addendum.trace_number,
+            Self::Dishonored(addendum) => addendum.trace_number,
+            Self::Contested(addendum) => addendum.trace_number,
             Self::Noc(addendum) => addendum.trace_number,
             Self::RefusedNoc(addendum) => addendum.trace_number,
         }
+    }
+
+    /// True for every kind of return: standard, dishonored and contested.
+    pub const fn is_return(&self) -> bool {
+        matches!(
+            self,
+            Self::Return(_) | Self::Dishonored(_) | Self::Contested(_)
+        )
     }
 
     /// True for both kinds of notification of change.
@@ -61,6 +78,18 @@ impl SpecialAddendum {
 impl From<ReturnAddendum> for SpecialAddendum {
     fn from(addendum: ReturnAddendum) -> Self {
         Self::Return(addendum)
+    }
+}
+
+impl From<DishonoredReturnAddendum> for SpecialAddendum {
+    fn from(addendum: DishonoredReturnAddendum) -> Self {
+        Self::Dishonored(addendum)
+    }
+}
+
+impl From<ContestedReturnAddendum> for SpecialAddendum {
+    fn from(addendum: ContestedReturnAddendum) -> Self {
+        Self::Contested(addendum)
     }
 }
 
@@ -82,10 +111,28 @@ impl Entry {
         self.detail.transaction_code.is_return()
     }
 
-    /// The return addendum, if the entry is a return.
+    /// The standard return addendum, if the entry is a return; see also
+    /// [`Entry::dishonored_return_addendum`] and
+    /// [`Entry::contested_return_addendum`].
     pub const fn return_addendum(&self) -> Option<&ReturnAddendum> {
         match &self.special_addendum {
             Some(SpecialAddendum::Return(addendum)) => Some(addendum),
+            _ => None,
+        }
+    }
+
+    /// The dishonored return addendum, if the entry is one.
+    pub const fn dishonored_return_addendum(&self) -> Option<&DishonoredReturnAddendum> {
+        match &self.special_addendum {
+            Some(SpecialAddendum::Dishonored(addendum)) => Some(addendum),
+            _ => None,
+        }
+    }
+
+    /// The contested dishonored return addendum, if the entry is one.
+    pub const fn contested_return_addendum(&self) -> Option<&ContestedReturnAddendum> {
+        match &self.special_addendum {
+            Some(SpecialAddendum::Contested(addendum)) => Some(addendum),
             _ => None,
         }
     }
@@ -156,7 +203,13 @@ impl Entry {
         };
         for line in lines {
             if line.get(1..3) == Some(b"99") {
-                entry.special_addendum = Some(ReturnAddendum::decode_exact(line)?.into());
+                entry.special_addendum = Some(match return_layout(line) {
+                    ReturnLayout::Standard => ReturnAddendum::decode_exact(line)?.into(),
+                    ReturnLayout::Dishonored => {
+                        DishonoredReturnAddendum::decode_exact(line)?.into()
+                    }
+                    ReturnLayout::Contested => ContestedReturnAddendum::decode_exact(line)?.into(),
+                });
             } else if line.get(1..3) == Some(b"98") && is_refused_noc(line) {
                 entry.special_addendum = Some(RefusedNocAddendum::decode_exact(line)?.into());
             } else if line.get(1..3) == Some(b"98") {

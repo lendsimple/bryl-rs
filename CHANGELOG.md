@@ -8,6 +8,13 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-nacha` reads and writes dishonored and contested dishonored returns:
+  type-99 `DishonoredReturnAddendum` (`DishonoredReturnCode` R61, R62,
+  R67–R70) and `ContestedReturnAddendum` (`ContestedReturnCode` R71–R77),
+  as `SpecialAddendum` variants written with `DishonoredReturnParams` and
+  `ContestedReturnParams`. The reader picks the layout from the code. The
+  writer and `File::validate` apply the return rules to them and check that
+  their two-digit reason codes name known codes.
 - `bryl-nacha` reads and writes notifications of change: COR entries with a
   type-98 `NocAddendum` (`ChangeCode` C01–C09, C13, C14) or
   `RefusedNocAddendum` (`RefusedChangeCode` C61–C69), held in

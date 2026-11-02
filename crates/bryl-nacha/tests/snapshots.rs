@@ -9,8 +9,9 @@ mod common;
 use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    BatchParams, ChangeCode, NocParams, RefusedChangeCode, RefusedNocParams, ReturnParams,
-    ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
+    BatchParams, ChangeCode, ContestedReturnCode, DishonoredReturnCode, DishonoredReturnParams,
+    NocParams, RefusedChangeCode, RefusedNocParams, ReturnParams, ReturnReasonCode,
+    ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 use pretty_assertions::assert_eq;
 
@@ -258,6 +259,49 @@ fn notifications_of_change() {
 }
 
 #[test]
+fn dishonored_returns() {
+    let output = write(|file| {
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::MixedDebitsAndCredits))
+            .unwrap();
+        // The ODFI dishonors an R01 return that arrived too late.
+        batch
+            .entry(nacha::EntryParams {
+                special_addendum: Some(
+                    DishonoredReturnParams {
+                        addenda_information: "RETURN RECEIVED LATE".into(),
+                        ..dishonored_params(DishonoredReturnCode::UntimelyReturn)
+                    }
+                    .into(),
+                ),
+                ..named(
+                    "JANE SMITH",
+                    2500,
+                    TransactionCode::CheckingReturnedCredit,
+                    &[],
+                )
+            })
+            .unwrap();
+        // The RDFI contests the dishonor: its return was on time.
+        batch
+            .entry(nacha::EntryParams {
+                special_addendum: Some(
+                    contested_params(ContestedReturnCode::TimelyOriginalReturn).into(),
+                ),
+                ..named(
+                    "JANE SMITH",
+                    2500,
+                    TransactionCode::CheckingReturnedDebit,
+                    &[],
+                )
+            })
+            .unwrap();
+        batch.finish().unwrap();
+    });
+    assert_snapshot("dishonored_returns.ach", &output);
+}
+
+#[test]
 fn snapshots_read_back_and_validate() {
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         return; // the snapshots are being rewritten by the other tests
@@ -269,6 +313,7 @@ fn snapshots_read_back_and_validate() {
         "returns",
         "loan_and_gl_entries",
         "notifications_of_change",
+        "dishonored_returns",
     ] {
         let file = nacha::File::read(read_snapshot(&format!("{name}.ach")).as_bytes()).unwrap();
         assert_eq!(file.validate(), [], "{name}");
