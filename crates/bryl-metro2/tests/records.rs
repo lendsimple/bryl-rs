@@ -32,10 +32,48 @@ mod codes {
         assert_eq!("NONEXISTENT".parse::<PortfolioType>().is_err(), true);
     }
 
+    /// Account types follow CRRG 2020 Exhibit 1.
+    #[test]
+    fn account_types_match_the_crrg() {
+        for (code, account_type) in [
+            ("0A", AccountType::TimeShareLoan),
+            ("0C", AccountType::DebtBuyer),
+            ("0F", AccountType::ConstructionLoan),
+            ("0G", AccountType::FlexibleSpendingCreditCard),
+            ("15", AccountType::LineOfCredit),
+            ("17", AccountType::ManufacturedHousing),
+            ("2C", AccountType::UsdaRealEstateMortgage),
+            ("3A", AccountType::AutoLease),
+            ("4D", AccountType::TelecommunicationsCellular),
+            ("5A", AccountType::RealEstateJuniorLiens),
+            ("5B", AccountType::SecondMortgage),
+            ("6A", AccountType::CommercialInstallmentLoan),
+            ("6B", AccountType::CommercialMortgageLoan),
+            ("6D", AccountType::HomeEquity),
+            ("70", AccountType::GovernmentOverpayment),
+            ("73", AccountType::GovernmentEmployeeAdvance),
+            ("75", AccountType::GovernmentBenefit),
+            ("7A", AccountType::CommercialLineOfCredit),
+            ("7B", AccountType::Agricultural),
+            ("89", AccountType::HomeEquityLineOfCredit),
+            ("8A", AccountType::BusinessCreditCard),
+            ("8B", AccountType::DepositAccountWithOverdraftProtection),
+            ("95", AccountType::AttorneyFees),
+            ("9A", AccountType::SecuredHomeImprovement),
+            ("9B", AccountType::BusinessLinePersonallyGuaranteed),
+        ] {
+            assert_eq!(code.parse(), Ok(account_type), "{code}");
+        }
+        // Obsolete since September 2011 (22, 23) or never assigned (78).
+        for code in ["22", "23", "78"] {
+            assert!(code.parse::<AccountType>().is_err(), "{code}");
+        }
+    }
+
     #[test]
     fn table_sizes() {
         assert_eq!(PortfolioType::ALL.len(), 5);
-        assert_eq!(AccountType::ALL.len(), 66);
+        assert_eq!(AccountType::ALL.len(), 63);
         assert_eq!(AccountStatus::ALL.len(), 23);
         assert_eq!(PaymentRating::ALL.len(), 9);
         // The blank code is a space in the profile, not a variant.
