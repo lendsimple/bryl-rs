@@ -103,12 +103,19 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    /// Writes the header and starts a file.
+    /// Writes the header and starts a file. The header is checked with
+    /// [`HeaderRecord::validate`] first, unless validation is disabled.
     ///
     /// # Errors
     ///
-    /// Returns an error if the header cannot be encoded or written.
+    /// Returns [`Error::InvalidHeader`] if the header breaks a rule, or an
+    /// error if it cannot be encoded or written.
     pub fn begin_file(&mut self, header: &HeaderRecord) -> Result<FileWriter<'_, W>, Error> {
+        if self.validate {
+            header
+                .validate()
+                .map_err(|violations| Error::InvalidHeader { violations })?;
+        }
         let mut file = FileWriter {
             writer: self,
             trailer: TrailerRecord::default(),

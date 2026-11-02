@@ -155,7 +155,13 @@ fn data_record() -> impl Strategy<Value = DataRecord> {
                         .build()
                 })
                 .collect(),
-            k1: k1.map(|name| {
+            // Collection and debt buyer accounts name the original creditor.
+            k1: (if base.account_type.requires_k1() {
+                k1.or_else(|| Some("ORIGINAL CREDITOR".into()))
+            } else {
+                k1
+            })
+            .map(|name| {
                 K1Segment::builder()
                     .original_creditor_name(name)
                     .creditor_classification(metro2::CreditorClassification::Financial)

@@ -3,12 +3,15 @@
 use chrono::NaiveDate;
 use thiserror::Error;
 
-use crate::codes::{AccountStatus, ConsumerInformationIndicator, PaymentRating, PortfolioType};
+use crate::codes::{
+    AccountStatus, AccountType, ComplianceConditionCode, ConsumerInformationIndicator,
+    PaymentRating, PortfolioType, SpecialComment,
+};
 use crate::data_record::DataRecord;
 use crate::profile::PaymentHistoryError;
-use crate::records::{BaseSegment, J1Segment, J2Segment, L1Segment};
+use crate::records::{BaseSegment, HeaderRecord, J1Segment, J2Segment, L1Segment};
 
-/// A rule broken by a base segment.
+/// A rule broken by a record or segment.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum Violation {
@@ -63,6 +66,31 @@ pub enum Violation {
     DateOfFirstDelinquencyNotAllowed {
         /// Account status.
         status: AccountStatus,
+    },
+    /// A required header record field is blank.
+    #[error("header {field} is required")]
+    HeaderFieldRequired {
+        /// Field name.
+        field: &'static str,
+    },
+    /// The account is reported as closed both by the credit grantor and at
+    /// the consumer's request; only one closed code applies.
+    #[error(
+        "special comment '{special_comment}' and compliance condition code \
+         '{compliance_condition_code}' both report the account closed; report only one"
+    )]
+    ConflictingClosedCodes {
+        /// Special comment (closed by the credit grantor).
+        special_comment: SpecialComment,
+        /// Compliance condition code (closed at the consumer's request).
+        compliance_condition_code: ComplianceConditionCode,
+    },
+    /// The account type belongs to a collection agency, debt buyer or check
+    /// guarantee company, which must report a K1 segment.
+    #[error("account type '{account_type}' requires a K1 segment (original creditor)")]
+    K1Required {
+        /// Account type.
+        account_type: AccountType,
     },
     /// The payment history profile breaks a rule.
     #[error("payment history profile: {0}")]
@@ -423,6 +451,7 @@ impl BaseSegment {
                     status: self.account_status,
                 },
             ),
+            validate_closed_codes(self.special_comment, self.compliance_condition_code).err(),
         ]
         .into_iter()
         .flatten()
@@ -561,7 +590,79 @@ impl DataRecord {
         if let Some(l1) = &self.l1 {
             violations.extend(l1.validate().err().unwrap_or_default());
         }
+        let account_type = self.base.account_type;
+        if account_type.requires_k1() && self.k1.is_none() {
+            violations.push(Violation::K1Required { account_type });
+        }
         into_result(violations)
+    }
+}
+
+impl HeaderRecord {
+    /// Checks that the header's required text fields, the reporter name and
+    /// address, are not blank. The activity date and date created are
+    /// always present.
+    ///
+    /// CRRG 2020 header record layout (page 3-7).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`Violation::HeaderFieldRequired`] for each blank field.
+    pub fn validate(&self) -> Result<(), Vec<Violation>> {
+        into_result(
+            [
+                ("reporter_name", &self.reporter_name),
+                ("reporter_address", &self.reporter_address),
+            ]
+            .into_iter()
+            .filter(|(_, value)| value.trim().is_empty())
+            .map(|(field, _)| Violation::HeaderFieldRequired { field })
+            .collect(),
+        )
+    }
+}
+
+impl AccountType {
+    /// True for the account types of collection agencies (48), debt buyers
+    /// (0C) and check guarantee companies (77), which must report the
+    /// original creditor in a K1 segment.
+    ///
+    /// CRRG 2020 K1 Segment (page 4-36), which requires K1 from these
+    /// reporters, and Exhibit 1, which assigns these account types to them.
+    /// The reporter type is inferred from the account type.
+    pub fn requires_k1(self) -> bool {
+        matches!(self.as_code(), "48" | "0C" | "77")
+    }
+}
+
+/// Checks that an account is not reported as closed both by the credit
+/// grantor (special comment M) and at the consumer's request (compliance
+/// condition code XA, XD, XE or XJ): only one closed code applies.
+///
+/// CRRG 2020 Frequently Asked Questions 39 and 40.
+///
+/// # Errors
+///
+/// Returns [`Violation::ConflictingClosedCodes`].
+pub fn validate_closed_codes(
+    special_comment: Option<SpecialComment>,
+    compliance_condition_code: Option<ComplianceConditionCode>,
+) -> Result<(), Violation> {
+    use ComplianceConditionCode as Ccc;
+    match (special_comment, compliance_condition_code) {
+        (
+            Some(special_comment @ SpecialComment::M),
+            Some(
+                compliance_condition_code @ (Ccc::ClosedAtRequest
+                | Ccc::ClosedAndFcraDispute
+                | Ccc::ClosedAndFcraInvestigated
+                | Ccc::ClosedAndFcbaDispute),
+            ),
+        ) => Err(Violation::ConflictingClosedCodes {
+            special_comment,
+            compliance_condition_code,
+        }),
+        _ => Ok(()),
     }
 }
 

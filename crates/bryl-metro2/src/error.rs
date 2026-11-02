@@ -30,6 +30,12 @@ pub enum Error {
         /// Segment identifier, e.g. `K1`.
         segment: &'static str,
     },
+    /// The header record breaks a Metro 2 rule; nothing was written.
+    #[error("header: {}", violations.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
+    InvalidHeader {
+        /// The rules broken.
+        violations: Vec<Violation>,
+    },
     /// A data record breaks a Metro 2 rule; nothing was written for it.
     #[error("account {account}: {}", violations.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
     Invalid {
