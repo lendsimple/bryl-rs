@@ -396,6 +396,25 @@ mod validate {
     }
 
     #[test]
+    fn dishonored_return_rules() {
+        let mut file = File::read(dishonored_file().as_bytes()).unwrap();
+        assert_eq!(kinds(&file), []);
+        let entry = &mut file.batches[0].entries[0];
+        let trace = entry.detail.trace_number;
+        let Some(SpecialAddendum::Dishonored(addendum)) = &mut entry.special_addendum else {
+            panic!("expected a dishonored return addendum");
+        };
+        addendum.trace_number = 1;
+        assert_eq!(
+            kinds(&file),
+            [IssueKind::ReturnTraceNumber {
+                recorded: 1,
+                expected: trace
+            }]
+        );
+    }
+
+    #[test]
     fn notification_of_change_rules() {
         let mut file = File::read(noc_file().as_bytes()).unwrap();
         assert_eq!(kinds(&file), []);

@@ -63,7 +63,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   debit/credit and addenda rules, prenote amounts, returns) before writing
   anything. Lines end with `\n` or, optionally, `\r\n`.
 - **Returns:** return entries carry a `ReturnAddendum` (addenda type 99)
-  with the `ReturnReasonCode` and the original entry's trace number.
+  with the `ReturnReasonCode` and the original entry's trace number, or a
+  `DishonoredReturnAddendum` or `ContestedReturnAddendum` for dishonored
+  and contested dishonored returns.
 - **Notifications of change:** COR entries carry a `NocAddendum` (addenda
   type 98) with the `ChangeCode` and the corrected data, or a
   `RefusedNocAddendum` refusing one.

@@ -4,7 +4,8 @@
 
 use chrono::NaiveDate;
 use nacha::{
-    BatchParams, ChangeCode, EntryParams, File, FileParams, NocParams, RefusedChangeCode,
+    BatchParams, ChangeCode, ContestedReturnCode, ContestedReturnParams, DishonoredReturnCode,
+    DishonoredReturnParams, EntryParams, File, FileParams, NocParams, RefusedChangeCode,
     RefusedNocParams, ReturnParams, ReturnReasonCode, ServiceClassCode, SpecialAddendumParams,
     StandardEntryClass, TransactionCode, Writer,
 };
@@ -47,6 +48,98 @@ fn return_params() -> impl Strategy<Value = ReturnParams> {
                 .addenda_information(information.unwrap_or_default())
                 .build()
         })
+}
+
+/// Two-digit return reason code (`1` for R01) of a known code.
+fn two_digit<C: Copy + std::fmt::Debug>(
+    codes: &'static [C],
+    as_code: fn(&C) -> &'static str,
+) -> impl Strategy<Value = u8> {
+    proptest::sample::select(codes).prop_map(move |code| as_code(&code)[1..].parse().unwrap())
+}
+
+/// A Julian settlement date.
+fn julian() -> impl Strategy<Value = String> {
+    (1u16..=366).prop_map(|day| format!("{day:03}"))
+}
+
+/// A dishonored return addendum of a return with a known reason code.
+fn dishonored_params() -> impl Strategy<Value = DishonoredReturnParams> {
+    (
+        proptest::sample::select(DishonoredReturnCode::ALL),
+        0u64..=999_999_999_999_999,
+        0u32..=99_999_999,
+        0u64..=999_999_999_999_999,
+        julian(),
+        two_digit(ReturnReasonCode::ALL, ReturnReasonCode::as_code),
+        proptest::option::of(text(21)),
+    )
+        .prop_map(
+            |(code, original_trace, dfi, return_trace, settlement, reason, information)| {
+                DishonoredReturnParams::builder()
+                    .dishonored_return_code(code)
+                    .original_entry_trace_number(original_trace)
+                    .original_receiving_dfi_id(dfi)
+                    .return_trace_number(return_trace)
+                    .return_settlement_date(settlement)
+                    .return_reason_code(reason)
+                    .addenda_information(information.unwrap_or_default())
+                    .build()
+            },
+        )
+}
+
+/// A contested dishonored return addendum with known reason codes.
+fn contested_params() -> impl Strategy<Value = ContestedReturnParams> {
+    (
+        proptest::sample::select(ContestedReturnCode::ALL),
+        0u64..=999_999_999_999_999,
+        0u64..36_500,
+        0u32..=99_999_999,
+        (julian(), julian(), julian()),
+        0u64..=999_999_999_999_999,
+        two_digit(ReturnReasonCode::ALL, ReturnReasonCode::as_code),
+        0u64..=999_999_999_999_999,
+        two_digit(DishonoredReturnCode::ALL, DishonoredReturnCode::as_code),
+    )
+        .prop_map(
+            |(
+                code,
+                original_trace,
+                days,
+                dfi,
+                (original_settlement, return_settlement, dishonored_settlement),
+                return_trace,
+                reason,
+                dishonored_trace,
+                dishonored_reason,
+            )| {
+                let date = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap() + chrono::Days::new(days);
+                ContestedReturnParams::builder()
+                    .contested_return_code(code)
+                    .original_entry_trace_number(original_trace)
+                    .date_original_entry_returned(date)
+                    .original_receiving_dfi_id(dfi)
+                    .original_settlement_date(original_settlement)
+                    .return_trace_number(return_trace)
+                    .return_settlement_date(return_settlement)
+                    .return_reason_code(reason)
+                    .dishonored_return_trace_number(dishonored_trace)
+                    .dishonored_return_settlement_date(dishonored_settlement)
+                    .dishonored_return_reason_code(dishonored_reason)
+                    .build()
+            },
+        )
+}
+
+/// The addendum of a return entry: a standard, dishonored or contested
+/// return.
+fn any_return_params() -> impl Strategy<Value = SpecialAddendumParams> {
+    prop_oneof![
+        return_params().prop_map(SpecialAddendumParams::from),
+        dishonored_params().prop_map(SpecialAddendumParams::from),
+        contested_params().prop_map(SpecialAddendumParams::from),
+    ]
 }
 
 /// A notification of change addendum or, half the time, a refusal of one.
@@ -108,7 +201,7 @@ fn entry(
         text(15),
         text(22),
         proptest::collection::vec(text(80), 0..=max_addenda),
-        return_params(),
+        any_return_params(),
         noc_params(),
     )
         .prop_map(
@@ -120,7 +213,7 @@ fn entry(
                 let (addenda, special) = if cor {
                     (Vec::new(), Some(noc))
                 } else if code.is_return() {
-                    (Vec::new(), Some(returned.into()))
+                    (Vec::new(), Some(returned))
                 } else if code.is_zero_dollar_remittance() && addenda.is_empty() {
                     (vec!["REMITTANCE".to_owned()], None)
                 } else {

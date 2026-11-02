@@ -786,6 +786,9 @@ mod rules {
 
 mod returns {
     use super::*;
+    use nacha::{
+        ContestedReturnCode, ContestedReturnParams, DishonoredReturnCode, DishonoredReturnParams,
+    };
     use pretty_assertions::assert_eq;
 
     fn write_return(params: EntryParams) -> Result<nacha::Entry, Error> {
@@ -887,6 +890,121 @@ mod returns {
         );
         let entry = write_return(with_date(ReturnReasonCode::AccountHolderDeceased)).unwrap();
         assert_eq!(entry.return_addendum().unwrap().date_of_death, date);
+    }
+
+    #[test]
+    fn dishonored_and_contested_returns_read_back_and_validate() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::MixedDebitsAndCredits))
+            .unwrap();
+        let dishonored = batch
+            .entry(EntryParams {
+                special_addendum: Some(
+                    dishonored_params(DishonoredReturnCode::UntimelyReturn).into(),
+                ),
+                ..entry_params(TransactionCode::CheckingReturnedCredit, 2500, &[])
+            })
+            .unwrap();
+        let contested = batch
+            .entry(EntryParams {
+                special_addendum: Some(
+                    contested_params(ContestedReturnCode::TimelyOriginalReturn).into(),
+                ),
+                ..entry_params(TransactionCode::CheckingReturnedDebit, 2500, &[])
+            })
+            .unwrap();
+        batch.finish().unwrap();
+        file.finish().unwrap();
+
+        let addendum = dishonored.dishonored_return_addendum().unwrap();
+        assert_eq!(addendum.trace_number, dishonored.detail.trace_number);
+        assert_eq!(dishonored.detail.addenda_record_indicator, 1);
+        let addendum = contested.contested_return_addendum().unwrap();
+        assert_eq!(addendum.trace_number, contested.detail.trace_number);
+
+        let file = File::read(writer.get_ref().as_slice()).unwrap();
+        assert_eq!(file.validate(), []);
+        assert_eq!(file.batches[0].entries, [dishonored, contested]);
+    }
+
+    #[test]
+    fn dishonored_return_needs_a_return_code() {
+        let kind = rejected(EntryParams {
+            special_addendum: Some(dishonored_params(DishonoredReturnCode::FieldErrors).into()),
+            ..entry_params(TransactionCode::CheckingDebit, 2500, &[])
+        });
+        assert_eq!(
+            kind,
+            IssueKind::UnexpectedReturnAddendum {
+                transaction_code: TransactionCode::CheckingDebit
+            }
+        );
+    }
+
+    #[test]
+    fn dishonored_return_not_in_cor_batches() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file.begin_batch(cor_batch_params()).unwrap();
+        let err = batch
+            .entry(EntryParams {
+                special_addendum: Some(dishonored_params(DishonoredReturnCode::FieldErrors).into()),
+                ..noc_entry_params()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::InvalidEntry(IssueKind::UnexpectedReturnAddendum { .. })
+        ));
+    }
+
+    #[test]
+    fn unknown_two_digit_return_reasons_are_rejected() {
+        let kind = rejected(EntryParams {
+            special_addendum: Some(
+                DishonoredReturnParams {
+                    return_reason_code: 68,
+                    ..dishonored_params(DishonoredReturnCode::DuplicateReturn)
+                }
+                .into(),
+            ),
+            ..return_entry_params(ReturnReasonCode::InsufficientFunds)
+        });
+        assert_eq!(
+            kind,
+            IssueKind::UnknownReturnReasonCode {
+                field: "return_reason_code",
+                code: 68
+            }
+        );
+        let kind = rejected(EntryParams {
+            special_addendum: Some(
+                ContestedReturnParams {
+                    dishonored_return_reason_code: 1,
+                    ..contested_params(ContestedReturnCode::NoErrorsFound)
+                }
+                .into(),
+            ),
+            ..return_entry_params(ReturnReasonCode::InsufficientFunds)
+        });
+        assert_eq!(
+            kind,
+            IssueKind::UnknownReturnReasonCode {
+                field: "dishonored_return_reason_code",
+                code: 1
+            }
+        );
+    }
+
+    #[test]
+    fn dishonored_return_carries_no_type_05_addenda() {
+        let kind = rejected(EntryParams {
+            special_addendum: Some(dishonored_params(DishonoredReturnCode::FieldErrors).into()),
+            ..entry_params(TransactionCode::CheckingReturnedDebit, 2500, &["MEMO"])
+        });
+        assert_eq!(kind, IssueKind::ReturnEntryAddenda { count: 1 });
     }
 }
 

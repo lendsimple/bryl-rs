@@ -108,6 +108,8 @@ impl<R: BufRead> Reader<R> {
         while let Some(record) = self.inner.next_if(|record| match record {
             NachaRecord::Addendum(_) => Ok(record),
             NachaRecord::ReturnAddendum(_)
+            | NachaRecord::DishonoredReturnAddendum(_)
+            | NachaRecord::ContestedReturnAddendum(_)
             | NachaRecord::NocAddendum(_)
             | NachaRecord::RefusedNocAddendum(_)
                 if !has_special(&entry) =>
@@ -119,6 +121,12 @@ impl<R: BufRead> Reader<R> {
             match record {
                 NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
                 NachaRecord::ReturnAddendum(addendum) => {
+                    entry.special_addendum = Some(addendum.into());
+                }
+                NachaRecord::DishonoredReturnAddendum(addendum) => {
+                    entry.special_addendum = Some(addendum.into());
+                }
+                NachaRecord::ContestedReturnAddendum(addendum) => {
                     entry.special_addendum = Some(addendum.into());
                 }
                 NachaRecord::NocAddendum(addendum) => {
