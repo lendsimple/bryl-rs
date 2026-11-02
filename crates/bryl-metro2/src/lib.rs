@@ -302,6 +302,16 @@
 //! Read errors name the input (set with [`Reader::with_name`]) and the byte
 //! offset or line, e.g. `report.dat @ offset 426 - truncated J1 segment`.
 //!
+//! # Serde
+//!
+//! The `serde` feature derives `Serialize` and `Deserialize` for [`File`],
+//! [`DataRecord`], [`Segment`], [`Metro2Record`] and every record and
+//! segment. Codes serialize as the codes in the file (`"11"`, `"AU"`,
+//! `"01"`), the payment history profile as its string (checked again when
+//! deserialized), dates as ISO 8601, and fields fixed by the format are left
+//! out. [`Issue`] and [`Violation`] can only be serialized, as they hold
+//! `&'static str` field names.
+//!
 //! # Not supported
 //!
 //! - The packed (binary) format.

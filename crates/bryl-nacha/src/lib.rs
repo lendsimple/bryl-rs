@@ -468,6 +468,19 @@
 //! `wasm32-unknown-unknown`, turn it off (`default-features = false`) and set
 //! [`FileParams::created_at`] yourself.
 //!
+//! # Serde
+//!
+//! The `serde` feature derives `Serialize` and `Deserialize` for [`File`],
+//! [`Batch`], [`Entry`], [`NachaRecord`] and every record, so a parsed file
+//! can be stored and loaded again. Codes serialize as the codes in the file
+//! (`"22"`, `"R01"`, `"PPD"`), a [`RoutingNumber`] as its nine digits
+//! (checked again when deserialized), dates as ISO 8601, and fields fixed
+//! by the format are left out.
+//!
+//! [`Issue`], [`IssueKind`] and [`UnreadEntry`] can only be serialized, as
+//! they hold `&'static str` field names and decode errors.
+//! [`Batch::unread_entries`] is serialized but empty after deserializing.
+//!
 //! # Bank differences
 //!
 //! NACHA leaves some details to the bank receiving the file. Check its file

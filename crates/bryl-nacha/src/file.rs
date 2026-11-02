@@ -13,6 +13,7 @@ use crate::validate::{Issue, IssueKind, batch_issues, entry_issues};
 
 /// A parsed NACHA file.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct File {
     /// The file header.
     pub header: FileHeader,
@@ -26,13 +27,16 @@ pub struct File {
 
 /// A batch: header, entries and control.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Batch {
     /// The batch header.
     pub header: BatchHeader,
     /// Entries with their addenda.
     pub entries: Vec<Entry>,
     /// Entries that [`File::read_lenient`] could not decode; always empty
-    /// after [`File::read`].
+    /// after [`File::read`]. Serialized, but always empty after
+    /// deserializing: their decode errors cannot be deserialized.
+    #[cfg_attr(feature = "serde", serde(skip_deserializing))]
     pub unread_entries: Vec<UnreadEntry>,
     /// The batch control.
     pub control: BatchControl,

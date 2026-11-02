@@ -13,6 +13,7 @@ use crate::validate::Violation;
 
 /// A parsed Metro 2 file.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct File {
     /// The header record.
     pub header: HeaderRecord,
@@ -27,6 +28,7 @@ pub struct File {
 
 /// A problem found by [`File::validate`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum Issue {
     /// A trailer total does not match the data records.

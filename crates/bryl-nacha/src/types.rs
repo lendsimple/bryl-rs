@@ -225,3 +225,37 @@ impl FieldValue for FileIdModifier {
 }
 
 impl AlphaField for FileIdModifier {}
+
+/// Serializes as the nine-digit string, keeping leading zeros.
+#[cfg(feature = "serde")]
+impl serde::Serialize for RoutingNumber {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+/// Deserializes from nine digits, checking the ABA checksum.
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for RoutingNumber {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+/// Serializes as the modifier character.
+#[cfg(feature = "serde")]
+impl serde::Serialize for FileIdModifier {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_char(self.get())
+    }
+}
+
+/// Deserializes from a character, checking that it is `A`–`Z` or `0`–`9`.
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for FileIdModifier {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(char::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}

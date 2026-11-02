@@ -14,6 +14,7 @@ use crate::records::BatchHeader;
 
 /// A rule a file or entry breaks.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum IssueKind {
     /// A control record total does not match the records it covers.
@@ -241,6 +242,7 @@ pub enum IssueKind {
 
 /// A rule broken by a file, located by batch and entry where possible.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Issue {
     /// Batch number, for batch and entry issues.
     pub batch_number: Option<u32>,

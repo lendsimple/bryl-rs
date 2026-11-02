@@ -19,16 +19,23 @@ name = "nacha"
 bon.workspace = true
 bryl.workspace = true
 chrono.workspace = true
+serde = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 proptest.workspace = true
+serde_json.workspace = true
 
 [features]
 default = ["clock"]
 # `FileParams::now()`, which reads the system clock.
 clock = ["chrono/clock"]
+# Serialize and deserialize records, files and code tables.
+serde = ["dep:serde", "bryl/serde", "chrono/serde"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [[example]]
 name = "write_sample"

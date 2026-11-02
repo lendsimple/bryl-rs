@@ -24,6 +24,7 @@ pub struct PaymentHistoryProfile(String);
 
 /// A payment history profile that cannot be represented or breaks a rule.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum PaymentHistoryError {
     /// More than 24 months.
@@ -110,3 +111,19 @@ impl FieldValue for PaymentHistoryProfile {
 }
 
 impl AlphaField for PaymentHistoryProfile {}
+
+/// Serializes as the profile string, most recent month first.
+#[cfg(feature = "serde")]
+impl serde::Serialize for PaymentHistoryProfile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Deserializes from a profile string, checking its characters.
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PaymentHistoryProfile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(&String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}

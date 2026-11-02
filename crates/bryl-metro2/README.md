@@ -62,6 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   against account status, amount past due, payment history, the characters
   allowed in names, addresses and account numbers, the retired status 05),
   then computes the trailer.
+- **Serde:** the optional `serde` feature serializes and deserializes
+  files, records and segments, with codes as the codes in the file.
 - **Reading:** `Reader` reads RDW-framed, newline-delimited and
   variable-blocked files; `File::read` reads a whole file and
   `File::validate` reports every problem.

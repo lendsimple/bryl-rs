@@ -17,16 +17,19 @@ use crate::profile::PaymentHistoryProfile;
 
 /// Header record (426 characters).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 426)]
 #[builder(on(String, into))]
 pub struct HeaderRecord {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(4), constant = 426)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_descriptor_word: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(6), constant = "HEADER")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_identifier: Const,
     /// Reporting cycle, for furnishers that report in cycles.
     #[bryl(alpha(2))]
@@ -84,11 +87,13 @@ pub struct HeaderRecord {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(146), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// Base segment (426 characters): one account.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 426)]
 #[builder(on(String, into))]
 pub struct BaseSegment {
@@ -103,6 +108,7 @@ pub struct BaseSegment {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(1), constant = 1)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub processing_indicator: Const,
     /// When the account was last updated.
     #[bryl(datetime("MMDDYYYYhhmmss"))]
@@ -110,6 +116,7 @@ pub struct BaseSegment {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_1: Const,
     /// Furnisher identification number assigned by the bureaus.
     #[bryl(alpha(20))]
@@ -199,6 +206,7 @@ pub struct BaseSegment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(17), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
     /// Consumer surname.
     #[bryl(alpha(25))]
@@ -260,16 +268,19 @@ pub struct BaseSegment {
 
 /// J1 segment (100 characters): associated consumer at the same address.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 100)]
 #[builder(on(String, into))]
 pub struct J1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "J1")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_1: Const,
     /// Surname.
     #[bryl(alpha(25))]
@@ -304,21 +315,25 @@ pub struct J1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
 }
 
 /// J2 segment (200 characters): associated consumer at a different address.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 200)]
 #[builder(on(String, into))]
 pub struct J2Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "J2")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_1: Const,
     /// Surname.
     #[bryl(alpha(25))]
@@ -379,17 +394,20 @@ pub struct J2Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
 }
 
 /// K1 segment (34 characters): original creditor.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 34)]
 #[builder(on(String, into))]
 pub struct K1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "K1")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Original creditor name.
     #[bryl(alpha(30))]
@@ -401,12 +419,14 @@ pub struct K1Segment {
 
 /// K2 segment (34 characters): purchased from or sold to.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 34)]
 #[builder(on(String, into))]
 pub struct K2Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "K2")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Purchased from, sold to, or remove.
     #[bryl(numeric(1))]
@@ -417,17 +437,20 @@ pub struct K2Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// K3 segment (40 characters): mortgage information.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 40)]
 #[builder(on(String, into))]
 pub struct K3Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "K3")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Agency (Fannie Mae, Freddie Mac) holding the loan.
     #[bryl(numeric(2))]
@@ -442,12 +465,14 @@ pub struct K3Segment {
 
 /// K4 segment (30 characters): specialized payment information.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 30)]
 #[builder(on(String, into))]
 pub struct K4Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "K4")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Balloon or deferred payment.
     #[bryl(numeric(2))]
@@ -465,17 +490,20 @@ pub struct K4Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// L1 segment (54 characters): account number or identification change.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 54)]
 #[builder(on(String, into))]
 pub struct L1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "L1")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// What changed.
     #[bryl(numeric(1))]
@@ -490,17 +518,20 @@ pub struct L1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// N1 segment (146 characters): employment information.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 146)]
 #[builder(on(String, into))]
 pub struct N1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(2), constant = "N1")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub segment_identifier: Const,
     /// Employer name.
     #[bryl(alpha(30))]
@@ -532,24 +563,29 @@ pub struct N1Segment {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// Trailer record (426 characters): file totals. All counters default to 0.
 #[derive(Record, Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 426)]
 #[allow(missing_docs)] // counter names are self-describing
 pub struct TrailerRecord {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(4), constant = 426)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_descriptor_word: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(7), constant = "TRAILER")]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_identifier: Const,
     #[bryl(numeric(9))]
     pub total_base_records: u32,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(9), reserved)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_1: Const,
     #[bryl(numeric(9))]
     pub total_status_code_df: u32,
@@ -640,5 +676,6 @@ pub struct TrailerRecord {
     pub total_telephone_numbers: u32,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(19), reserved)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
 }

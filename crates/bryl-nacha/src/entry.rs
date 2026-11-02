@@ -8,6 +8,7 @@ use crate::records::{
 
 /// An entry detail record with its addenda.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Entry {
     /// The entry detail record.
     pub detail: EntryDetail,
@@ -21,6 +22,7 @@ pub struct Entry {
 /// The one addendum a return or notification of change entry carries in
 /// place of type-05 addenda.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum SpecialAddendum {
     /// A return (addenda type 99).
@@ -227,6 +229,7 @@ impl Entry {
 /// its addenda failed, for instance on a routing number check digit or an
 /// unknown code. See [`File::read_lenient`](crate::File::read_lenient).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct UnreadEntry {
     /// Where its entry detail record starts.
     pub location: Location,

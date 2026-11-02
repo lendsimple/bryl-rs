@@ -16,16 +16,19 @@ pub const RECORD_LENGTH: usize = 94;
 
 /// File header record (`1`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct FileHeader {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "1")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 1)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub priority_code: Const,
     /// Routing number of the receiving point, written as ` TTTTAAAAC`.
     #[bryl(numeric(10), pad = ' ')]
@@ -49,14 +52,17 @@ pub struct FileHeader {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(3), constant = 94)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_size: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 10)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub blocking_factor: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(1), constant = 1)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub format_code: Const,
     /// Name of the receiving point.
     #[bryl(alpha(23))]
@@ -79,12 +85,14 @@ impl FileHeader {
 
 /// Company/batch header record (`5`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct BatchHeader {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "5")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Which transactions the batch contains.
     #[bryl(numeric(3))]
@@ -120,6 +128,7 @@ pub struct BatchHeader {
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(1), constant = 1)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub originator_status_code: Const,
     /// First eight digits of the originating DFI's routing number.
     #[bryl(numeric(8))]
@@ -131,12 +140,14 @@ pub struct BatchHeader {
 
 /// Entry detail record (`6`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct EntryDetail {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "6")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Account type and debit/credit/prenote/return.
     #[bryl(numeric(2))]
@@ -192,16 +203,19 @@ impl EntryDetail {
 
 /// Entry detail addenda record (`7`, addenda type `05`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct Addendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 5)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// Free-form payment information.
     #[bryl(alpha(80))]
@@ -223,16 +237,19 @@ pub struct Addendum {
 /// dishonored returns rearrange the addenda information; see
 /// [`DishonoredReturnAddendum`] and [`ContestedReturnAddendum`].
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct ReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 99)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// Why the entry was returned.
     #[bryl(alpha(3))]
@@ -263,16 +280,19 @@ pub struct ReturnAddendum {
 /// for instance because it came too late. It carries the dishonored return's
 /// trace number, settlement date and reason code.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct DishonoredReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 99)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// Why the return is dishonored.
     #[bryl(alpha(3))]
@@ -283,6 +303,7 @@ pub struct DishonoredReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(6), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
     /// First eight digits of the original entry's receiving DFI routing
     /// number.
@@ -291,6 +312,7 @@ pub struct DishonoredReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(3), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
     /// Trace number of the return being dishonored.
     #[bryl(numeric(15))]
@@ -326,16 +348,19 @@ impl DishonoredReturnAddendum {
 /// its return. It carries the original return's and the dishonored return's
 /// trace numbers, settlement dates and reason codes.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct ContestedReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 99)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// Why the dishonor is contested.
     #[bryl(alpha(3))]
@@ -379,6 +404,7 @@ pub struct ContestedReturnAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
     /// Trace number of the contested dishonored return entry itself, the
     /// same as its entry detail's.
@@ -431,16 +457,19 @@ pub(crate) fn return_layout(raw: &[u8]) -> ReturnLayout {
 /// in a COR batch carries exactly one, in place of type-05 addenda, to tell
 /// the originator what to correct.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct NocAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 98)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// What must be corrected.
     #[bryl(alpha(3))]
@@ -451,6 +480,7 @@ pub struct NocAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(6), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
     /// First eight digits of the original entry's receiving DFI routing
     /// number.
@@ -464,6 +494,7 @@ pub struct NocAddendum {
     /// which this library does not support.
     #[bryl(alpha(15), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
     /// Trace number of the notification of change itself, the same as its
     /// entry detail's.
@@ -476,16 +507,19 @@ pub struct NocAddendum {
 /// change it received, giving the refused notification's change code and
 /// trace sequence.
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct RefusedNocAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "7")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(numeric(2), constant = 98)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub addenda_type_code: Const,
     /// Why the notification of change is refused.
     #[bryl(alpha(3))]
@@ -496,6 +530,7 @@ pub struct RefusedNocAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(6), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
     /// First eight digits of the original entry's receiving DFI routing
     /// number.
@@ -514,6 +549,7 @@ pub struct RefusedNocAddendum {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(5), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved_2: Const,
     /// Trace number of the refused notification of change entry itself, the
     /// same as its entry detail's.
@@ -529,12 +565,14 @@ pub(crate) fn is_refused_noc(raw: &[u8]) -> bool {
 
 /// Company/batch control record (`8`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 #[builder(on(String, into))]
 pub struct BatchControl {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "8")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Which transactions the batch contains.
     #[bryl(numeric(3))]
@@ -557,10 +595,12 @@ pub struct BatchControl {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(19), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub message_authentication_code: Const,
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(6), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
     /// First eight digits of the originating DFI's routing number.
     #[bryl(numeric(8))]
@@ -572,11 +612,13 @@ pub struct BatchControl {
 
 /// File control record (`9`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[bryl(sanitize(upper), length = 94)]
 pub struct FileControl {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(1), constant = "9")]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub record_type: Const,
     /// Number of batches.
     #[bryl(numeric(6))]
@@ -601,11 +643,13 @@ pub struct FileControl {
     /// Fixed by the format; stores nothing.
     #[bryl(alpha(39), reserved)]
     #[builder(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub reserved: Const,
 }
 
 /// Any NACHA line.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum NachaRecord {
     /// `1`
