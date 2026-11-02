@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use bryl::read::Location;
+
 use thiserror::Error;
 
 use crate::codes::{
@@ -211,6 +213,15 @@ pub enum IssueKind {
     DateOfDeath {
         /// The return reason code.
         return_reason_code: ReturnReasonCode,
+    },
+    /// Lenient reading could not decode an entry; see
+    /// [`UnreadEntry`](crate::UnreadEntry).
+    #[error("entry could not be read: {location}: {error}")]
+    UnreadEntry {
+        /// Where the record that failed to decode starts.
+        location: Location,
+        /// Why it failed.
+        error: bryl::Error,
     },
     /// Trace numbers within a batch are not ascending.
     #[error("trace number is not greater than the previous entry's")]

@@ -8,6 +8,12 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-nacha` lenient reading: `File::read_lenient`,
+  `Reader::read_file_lenient` and `Reader::next_entry_lenient` keep an entry
+  whose detail or addenda fail to decode (a bad routing check digit, an
+  unknown code) as an `UnreadEntry`, with its raw lines, location and error,
+  and `detail_field` to decode its intact fields. `File::validate` reports
+  `IssueKind::UnreadEntry` for each. Strict reading is unchanged.
 - `bryl-nacha` reads and writes dishonored and contested dishonored returns:
   type-99 `DishonoredReturnAddendum` (`DishonoredReturnCode` R61, R62,
   R67–R70) and `ContestedReturnAddendum` (`ContestedReturnCode` R71–R77),
@@ -39,6 +45,8 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- **Breaking:** `nacha::Batch` has an `unread_entries` field, empty unless
+  the file was read leniently.
 - **Breaking:** `Entry::return_addendum` and `EntryParams::return_addendum`
   are replaced by `special_addendum`, holding a `SpecialAddendum` (or
   `SpecialAddendumParams`): the one addendum a return entry carries in place

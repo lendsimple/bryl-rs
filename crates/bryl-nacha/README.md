@@ -70,7 +70,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   type 98) with the `ChangeCode` and the corrected data, or a
   `RefusedNocAddendum` refusing one.
 - **Reading:** `Reader` reads record by record; `File::read` reads a whole
-  file and `File::validate` reports every problem.
+  file and `File::validate` reports every problem. `File::read_lenient`
+  keeps entries that fail to decode as `UnreadEntry` values instead of
+  failing the file.
 - **Values:** `RoutingNumber` checks the ABA checksum; `TransactionCode::for_entry`
   picks a code from a signed amount.
 

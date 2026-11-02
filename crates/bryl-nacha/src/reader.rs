@@ -10,7 +10,7 @@ use std::io::BufRead;
 
 use bryl::read::{Dispatch, LineSource, ReadError, ReadErrorKind};
 
-use crate::entry::Entry;
+use crate::entry::{Entry, UnreadEntry};
 use crate::file::{Batch, File};
 use crate::records::{BatchControl, BatchHeader, FileControl, FileHeader, NachaRecord};
 
@@ -201,41 +201,74 @@ impl<R: BufRead> Reader<R> {
             addenda: Vec::new(),
             special_addendum: None,
         };
-        let has_special = |entry: &Entry| entry.special_addendum.is_some();
-        while let Some(record) = self.next_if(|record| match record {
-            NachaRecord::Addendum(_) => Ok(record),
-            NachaRecord::ReturnAddendum(_)
-            | NachaRecord::DishonoredReturnAddendum(_)
-            | NachaRecord::ContestedReturnAddendum(_)
-            | NachaRecord::NocAddendum(_)
-            | NachaRecord::RefusedNocAddendum(_)
-                if !has_special(&entry) =>
-            {
+        while let Some(record) = self.next_if(|record| {
+            if accepts(&entry, &record) {
                 Ok(record)
+            } else {
+                Err(record)
             }
-            other => Err(other),
         })? {
-            match record {
-                NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
-                NachaRecord::ReturnAddendum(addendum) => {
-                    entry.special_addendum = Some(addendum.into());
-                }
-                NachaRecord::DishonoredReturnAddendum(addendum) => {
-                    entry.special_addendum = Some(addendum.into());
-                }
-                NachaRecord::ContestedReturnAddendum(addendum) => {
-                    entry.special_addendum = Some(addendum.into());
-                }
-                NachaRecord::NocAddendum(addendum) => {
-                    entry.special_addendum = Some(addendum.into());
-                }
-                NachaRecord::RefusedNocAddendum(addendum) => {
-                    entry.special_addendum = Some(addendum.into());
-                }
-                _ => unreachable!("selected above"),
-            }
+            add(&mut entry, record);
         }
         Ok(Some(entry))
+    }
+
+    /// Reads the next entry like [`Reader::next_entry`], but keeps an entry
+    /// whose detail or addenda fail to decode as an [`UnreadEntry`] instead
+    /// of failing. An unread entry takes every addenda record that follows
+    /// its entry detail.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input cannot be read or a line is not a
+    /// NACHA record at all.
+    pub fn next_entry_lenient(&mut self) -> Result<Option<Result<Entry, UnreadEntry>>, ReadError> {
+        let Some(line) = self.inner.next_if(|line| {
+            if line.raw.first() == Some(&b'6') {
+                Ok(line)
+            } else {
+                Err(line)
+            }
+        })?
+        else {
+            return Ok(None);
+        };
+        let location = self.inner.location();
+        let mut lines = vec![line.raw];
+        let mut state = match line.record {
+            Ok(NachaRecord::EntryDetail(detail)) => Ok(Entry {
+                detail,
+                addenda: Vec::new(),
+                special_addendum: None,
+            }),
+            Ok(_) => unreachable!("an entry detail line"),
+            Err(error) => Err((location, error)),
+        };
+        loop {
+            // An unreadable entry detail line starts the next entry.
+            let accept = |line: &Line| match (&state, &line.record) {
+                (Ok(entry), Ok(record)) => accepts(entry, record),
+                (Ok(_), Err(_)) | (Err(_), _) => line.raw.first() == Some(&b'7'),
+            };
+            let Some(line) = self
+                .inner
+                .next_if(|line| if accept(&line) { Ok(line) } else { Err(line) })?
+            else {
+                break;
+            };
+            lines.push(line.raw);
+            match (&mut state, line.record) {
+                (Ok(entry), Ok(record)) => add(entry, record),
+                (Ok(_), Err(error)) => state = Err((self.inner.location(), error)),
+                (Err(_), _) => {}
+            }
+        }
+        Ok(Some(state.map_err(|(error_location, error)| UnreadEntry {
+            location,
+            lines,
+            error_location,
+            error,
+        })))
     }
 
     /// Iterates over the current batch's entries.
@@ -293,14 +326,41 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Returns the first record that is missing, out of place or invalid.
     pub fn read_file(&mut self) -> Result<File, ReadError> {
+        self.read_file_with(false)
+    }
+
+    /// Reads a whole file, keeping entries that fail to decode as
+    /// [`UnreadEntry`] values; see [`File::read_lenient`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the first record outside an entry that is missing, out of
+    /// place or invalid.
+    pub fn read_file_lenient(&mut self) -> Result<File, ReadError> {
+        self.read_file_with(true)
+    }
+
+    fn read_file_with(&mut self, lenient: bool) -> Result<File, ReadError> {
         let header = self.file_header()?;
         let mut batches = Vec::new();
         while let Some(batch_header) = self.next_batch()? {
-            let entries = self.entries().collect::<Result<_, _>>()?;
+            let mut entries = Vec::new();
+            let mut unread_entries = Vec::new();
+            if lenient {
+                while let Some(entry) = self.next_entry_lenient()? {
+                    match entry {
+                        Ok(entry) => entries.push(entry),
+                        Err(unread) => unread_entries.push(unread),
+                    }
+                }
+            } else {
+                entries = self.entries().collect::<Result<_, _>>()?;
+            }
             let control = self.batch_control()?;
             batches.push(Batch {
                 header: batch_header,
                 entries,
+                unread_entries,
                 control,
             });
         }
@@ -312,6 +372,39 @@ impl<R: BufRead> Reader<R> {
             control,
             filler_count,
         })
+    }
+}
+
+/// True if `record` is an addendum `entry` can take: any type-05 addendum,
+/// and one return or notification of change addendum.
+fn accepts(entry: &Entry, record: &NachaRecord) -> bool {
+    match record {
+        NachaRecord::Addendum(_) => true,
+        NachaRecord::ReturnAddendum(_)
+        | NachaRecord::DishonoredReturnAddendum(_)
+        | NachaRecord::ContestedReturnAddendum(_)
+        | NachaRecord::NocAddendum(_)
+        | NachaRecord::RefusedNocAddendum(_) => entry.special_addendum.is_none(),
+        _ => false,
+    }
+}
+
+/// Adds an addendum record accepted by [`accepts`] to `entry`.
+fn add(entry: &mut Entry, record: NachaRecord) {
+    match record {
+        NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
+        NachaRecord::ReturnAddendum(addendum) => entry.special_addendum = Some(addendum.into()),
+        NachaRecord::DishonoredReturnAddendum(addendum) => {
+            entry.special_addendum = Some(addendum.into());
+        }
+        NachaRecord::ContestedReturnAddendum(addendum) => {
+            entry.special_addendum = Some(addendum.into());
+        }
+        NachaRecord::NocAddendum(addendum) => entry.special_addendum = Some(addendum.into()),
+        NachaRecord::RefusedNocAddendum(addendum) => {
+            entry.special_addendum = Some(addendum.into());
+        }
+        _ => unreachable!("not an addendum"),
     }
 }
 

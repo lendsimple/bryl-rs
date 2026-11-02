@@ -1,4 +1,5 @@
-use bryl::Record;
+use bryl::read::Location;
+use bryl::{FieldValue, Record};
 
 use crate::records::{
     Addendum, ContestedReturnAddendum, DishonoredReturnAddendum, EntryDetail, NocAddendum,
@@ -219,5 +220,38 @@ impl Entry {
             }
         }
         Ok(entry)
+    }
+}
+
+/// An entry that lenient reading could not decode: its entry detail or one of
+/// its addenda failed, for instance on a routing number check digit or an
+/// unknown code. See [`File::read_lenient`](crate::File::read_lenient).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnreadEntry {
+    /// Where its entry detail record starts.
+    pub location: Location,
+    /// The entry detail record and its addenda, exactly as read.
+    pub lines: Vec<Vec<u8>>,
+    /// Where the first record that failed to decode starts.
+    pub error_location: Location,
+    /// Why that record failed to decode.
+    pub error: bryl::Error,
+}
+
+impl UnreadEntry {
+    /// Decodes one field of the entry detail record, such as
+    /// `trace_number` or `amount`, so the entry can still be routed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the field's decode error if its own content is invalid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`EntryDetail`] has no field `name`.
+    pub fn detail_field<T: FieldValue>(&self, name: &str) -> Result<T, bryl::Error> {
+        let spec =
+            EntryDetail::field(name).unwrap_or_else(|| panic!("EntryDetail has no field {name:?}"));
+        bryl::codec::decode_field::<EntryDetail, T>(spec, &self.lines[0])
     }
 }
