@@ -50,6 +50,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         }
         #conversions
         #field_value
+        ::bryl::__code_serde!(#name);
     })
 }
 

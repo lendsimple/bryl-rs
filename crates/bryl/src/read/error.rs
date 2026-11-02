@@ -5,6 +5,7 @@ use thiserror::Error;
 
 /// Position of a record in its input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum Location {
     /// 1-based line number.
     Line(usize),
