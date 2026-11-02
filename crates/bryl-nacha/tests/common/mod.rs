@@ -4,8 +4,8 @@
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use nacha::{
-    BatchParams, EntryDetail, EntryParams, FileParams, ReturnParams, ReturnReasonCode,
-    RoutingNumber, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
+    BatchParams, ChangeCode, EntryDetail, EntryParams, FileParams, NocParams, ReturnParams,
+    ReturnReasonCode, RoutingNumber, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 
 pub fn sample_date() -> NaiveDate {
@@ -91,6 +91,35 @@ pub fn return_params(return_reason_code: ReturnReasonCode) -> ReturnParams {
         .build()
 }
 
+/// A notification of change for an entry that was sent with trace number
+/// 091000010000001 to routing number 091000019.
+pub fn noc_params(change_code: ChangeCode, corrected_data: &str) -> NocParams {
+    NocParams::builder()
+        .change_code(change_code)
+        .original_entry_trace_number(91_000_010_000_001)
+        .original_receiving_dfi_id(9_100_001)
+        .corrected_data(corrected_data)
+        .build()
+}
+
+/// A notification of change correcting the account number of a checking
+/// debit.
+pub fn noc_entry_params() -> EntryParams {
+    EntryParams {
+        special_addendum: Some(noc_params(ChangeCode::IncorrectAccountNumber, "987654321").into()),
+        ..entry_params(TransactionCode::CheckingReturnedDebit, 0, &[])
+    }
+}
+
+/// Batch values for a COR (notification of change) batch.
+pub fn cor_batch_params() -> BatchParams {
+    BatchParams {
+        standard_entry_class: StandardEntryClass::Cor,
+        company_entry_description: "NOC".into(),
+        ..batch_params(ServiceClassCode::MixedDebitsAndCredits)
+    }
+}
+
 /// A return of a checking debit.
 pub fn return_entry_params(return_reason_code: ReturnReasonCode) -> EntryParams {
     EntryParams {
@@ -131,6 +160,17 @@ pub fn return_file() -> String {
     batch
         .entry(return_entry_params(ReturnReasonCode::InsufficientFunds))
         .unwrap();
+    batch.finish().unwrap();
+    file.finish().unwrap();
+    String::from_utf8(writer.into_inner()).unwrap()
+}
+
+/// Writes a file with one COR batch holding a C01 notification of change.
+pub fn noc_file() -> String {
+    let mut writer = Writer::new(Vec::new());
+    let mut file = writer.begin_file(file_params()).unwrap();
+    let mut batch = file.begin_batch(cor_batch_params()).unwrap();
+    batch.entry(noc_entry_params()).unwrap();
     batch.finish().unwrap();
     file.finish().unwrap();
     String::from_utf8(writer.into_inner()).unwrap()

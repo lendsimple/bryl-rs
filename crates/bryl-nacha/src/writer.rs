@@ -6,12 +6,15 @@ use bon::Builder;
 use bryl::{EncodeCx, Record, Sanitize};
 use chrono::{NaiveDate, NaiveDateTime};
 
-use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{
+    ChangeCode, RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
+    TransactionCode,
+};
 use crate::entry::{Entry, SpecialAddendum};
 use crate::error::Error;
 use crate::records::{
-    Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader,
-    ReturnAddendum,
+    Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader, NocAddendum,
+    RefusedNocAddendum, ReturnAddendum,
 };
 use crate::totals::Totals;
 use crate::types::{FileIdModifier, RoutingNumber};
@@ -211,25 +214,80 @@ pub struct EntryParams {
     /// Payment related information, one addendum each.
     #[builder(default)]
     pub addenda: Vec<String>,
-    /// For a return entry, its type-99 addendum. Accepts a
-    /// [`ReturnParams`] directly.
+    /// For a return entry, its type-99 addendum; for a COR entry, its type-98
+    /// addendum. Accepts a [`ReturnParams`], [`NocParams`] or
+    /// [`RefusedNocParams`] directly.
     #[builder(into)]
     pub special_addendum: Option<SpecialAddendumParams>,
 }
 
-/// Values for the one addendum a return entry carries in place of type-05
-/// addenda; see [`SpecialAddendum`](crate::SpecialAddendum).
+/// Values for the one addendum a return or notification of change entry
+/// carries in place of type-05 addenda; see
+/// [`SpecialAddendum`](crate::SpecialAddendum).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SpecialAddendumParams {
     /// A return (addenda type 99).
     Return(ReturnParams),
+    /// A notification of change (addenda type 98).
+    Noc(NocParams),
+    /// A refused notification of change (addenda type 98).
+    RefusedNoc(RefusedNocParams),
 }
 
 impl From<ReturnParams> for SpecialAddendumParams {
     fn from(params: ReturnParams) -> Self {
         Self::Return(params)
     }
+}
+
+impl From<NocParams> for SpecialAddendumParams {
+    fn from(params: NocParams) -> Self {
+        Self::Noc(params)
+    }
+}
+
+impl From<RefusedNocParams> for SpecialAddendumParams {
+    fn from(params: RefusedNocParams) -> Self {
+        Self::RefusedNoc(params)
+    }
+}
+
+/// Notification of change addendum values. The addendum's trace number is
+/// the entry's.
+#[derive(Builder, Debug, Clone, PartialEq, Eq)]
+#[builder(on(String, into))]
+pub struct NocParams {
+    /// What must be corrected.
+    pub change_code: ChangeCode,
+    /// Trace number of the entry being corrected.
+    pub original_entry_trace_number: u64,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    pub original_receiving_dfi_id: u32,
+    /// The corrected values, laid out as [`ChangeCode`] describes.
+    pub corrected_data: String,
+}
+
+/// Refused notification of change addendum values. The addendum's trace
+/// number is the entry's.
+#[derive(Builder, Debug, Clone, PartialEq, Eq)]
+#[builder(on(String, into))]
+pub struct RefusedNocParams {
+    /// Why the notification of change is refused.
+    pub refused_change_code: RefusedChangeCode,
+    /// Trace number of the original entry.
+    pub original_entry_trace_number: u64,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    pub original_receiving_dfi_id: u32,
+    /// The corrected data of the refused notification of change.
+    pub corrected_data: String,
+    /// Change code of the refused notification of change.
+    pub change_code: ChangeCode,
+    /// Last seven digits of the refused notification of change's trace
+    /// number.
+    pub trace_sequence_number: u32,
 }
 
 /// Return addendum values. The addendum's trace number is the return entry's.
@@ -520,6 +578,8 @@ impl<W: Write> BatchWriter<'_, '_, W> {
         }
         match &entry.special_addendum {
             Some(SpecialAddendum::Return(addendum)) => self.file.encode(addendum, &mut buf)?,
+            Some(SpecialAddendum::Noc(addendum)) => self.file.encode(addendum, &mut buf)?,
+            Some(SpecialAddendum::RefusedNoc(addendum)) => self.file.encode(addendum, &mut buf)?,
             None => {}
         }
         let records = u32::try_from(entry.addenda_count() + 1).unwrap_or(u32::MAX);
@@ -563,6 +623,24 @@ fn special_addendum(params: SpecialAddendumParams, trace_number: u64) -> Special
             .maybe_date_of_death(params.date_of_death)
             .original_receiving_dfi_id(params.original_receiving_dfi_id)
             .addenda_information(params.addenda_information)
+            .trace_number(trace_number)
+            .build()
+            .into(),
+        SpecialAddendumParams::Noc(params) => NocAddendum::builder()
+            .change_code(params.change_code)
+            .original_entry_trace_number(params.original_entry_trace_number)
+            .original_receiving_dfi_id(params.original_receiving_dfi_id)
+            .corrected_data(params.corrected_data)
+            .trace_number(trace_number)
+            .build()
+            .into(),
+        SpecialAddendumParams::RefusedNoc(params) => RefusedNocAddendum::builder()
+            .refused_change_code(params.refused_change_code)
+            .original_entry_trace_number(params.original_entry_trace_number)
+            .original_receiving_dfi_id(params.original_receiving_dfi_id)
+            .corrected_data(params.corrected_data)
+            .change_code(params.change_code)
+            .trace_sequence_number(params.trace_sequence_number)
             .trace_number(trace_number)
             .build()
             .into(),

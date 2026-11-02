@@ -8,6 +8,13 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-nacha` reads and writes notifications of change: COR entries with a
+  type-98 `NocAddendum` (`ChangeCode` C01–C09, C13, C14) or
+  `RefusedNocAddendum` (`RefusedChangeCode` C61–C69), held in
+  `Entry::special_addendum` like return addenda. The writer and
+  `File::validate` check the COR rules: a zero amount, a return transaction
+  code, exactly one type-98 addendum with the entry's trace number, and no
+  type-98 addenda outside COR batches.
 - `bryl-nacha` transaction codes for general ledger (41–44, 46–49) and loan
   (51–56) accounts, and the zero-dollar remittance codes (24, 29, 34, 39, 44,
   49, 54), following moov-io/ach. `AccountKind` gains `GeneralLedger` and

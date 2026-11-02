@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::codes::{
     REVERSAL, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
 };
-use crate::entry::Entry;
+use crate::entry::{Entry, SpecialAddendum};
 use crate::records::BatchHeader;
 
 /// A rule a file or entry breaks.
@@ -143,7 +143,39 @@ pub enum IssueKind {
     /// A return entry (other than in a COR batch) has no return addendum.
     #[error("return entries need a return addendum")]
     MissingReturnAddendum,
-    /// An entry that is not a return has a return addendum.
+    /// An entry in a COR batch has no notification of change addendum.
+    #[error("notification of change entries need a type-98 addendum")]
+    MissingNocAddendum,
+    /// A notification of change addendum outside a COR batch.
+    #[error("notification of change addenda are not allowed in a {standard_entry_class} batch")]
+    UnexpectedNocAddendum {
+        /// Batch SEC code.
+        standard_entry_class: StandardEntryClass,
+    },
+    /// A notification of change has a non-zero amount.
+    #[error("notification of change amount must be 0, got {amount}")]
+    NocAmount {
+        /// The amount.
+        amount: u64,
+    },
+    /// A notification of change uses a transaction code that is not a
+    /// return or notification of change code (x1, x6).
+    #[error("transaction code {transaction_code} is not a notification of change code")]
+    NocTransactionCode {
+        /// Entry transaction code.
+        transaction_code: TransactionCode,
+    },
+    /// A notification of change addendum's trace number differs from its
+    /// entry's.
+    #[error("notification of change trace number is {recorded:015}, expected {expected:015}")]
+    NocTraceNumber {
+        /// Value in the addendum.
+        recorded: u64,
+        /// The entry's trace number.
+        expected: u64,
+    },
+    /// An entry that is not a return, or a notification of change entry, has
+    /// a return addendum.
     #[error(
         "transaction code {transaction_code} is not a return but the entry has a return addendum"
     )]
@@ -267,17 +299,31 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
     if code == TransactionCode::LoanDebit && !reversal {
         issues.push(IssueKind::LoanDebitNotReversal);
     }
-    // Notifications of change (COR) also use return transaction codes, but
-    // carry type-98 addenda, which are not supported.
-    if code.is_return() && sec != StandardEntryClass::Cor {
-        return_issues(entry, &mut issues);
+    // Notifications of change (COR) use return transaction codes too, but
+    // carry type-98 addenda.
+    if sec == StandardEntryClass::Cor {
+        noc_issues(entry, &mut issues);
+        addenda_limit_issues(sec, entry, &mut issues);
     } else {
-        if entry.return_addendum().is_some() {
-            issues.push(IssueKind::UnexpectedReturnAddendum {
-                transaction_code: code,
+        if entry
+            .special_addendum
+            .as_ref()
+            .is_some_and(SpecialAddendum::is_noc)
+        {
+            issues.push(IssueKind::UnexpectedNocAddendum {
+                standard_entry_class: sec,
             });
         }
-        addenda_limit_issues(sec, entry, &mut issues);
+        if code.is_return() {
+            return_issues(entry, &mut issues);
+        } else {
+            if entry.return_addendum().is_some() {
+                issues.push(IssueKind::UnexpectedReturnAddendum {
+                    transaction_code: code,
+                });
+            }
+            addenda_limit_issues(sec, entry, &mut issues);
+        }
     }
     if detail.addenda_record_indicator != u8::from(entry.addenda_count() > 0) {
         issues.push(IssueKind::AddendaIndicator {
@@ -301,6 +347,37 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
         }
     }
     issues
+}
+
+/// A notification of change has a zero amount, a return transaction code,
+/// and one type-98 addendum (a notification or a refusal) with its own trace
+/// number.
+fn noc_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
+    let detail = &entry.detail;
+    if detail.amount != 0 {
+        issues.push(IssueKind::NocAmount {
+            amount: detail.amount,
+        });
+    }
+    if !detail.transaction_code.is_return() {
+        issues.push(IssueKind::NocTransactionCode {
+            transaction_code: detail.transaction_code,
+        });
+    }
+    match &entry.special_addendum {
+        None => issues.push(IssueKind::MissingNocAddendum),
+        Some(SpecialAddendum::Return(_)) => issues.push(IssueKind::UnexpectedReturnAddendum {
+            transaction_code: detail.transaction_code,
+        }),
+        Some(addendum) => {
+            if addendum.trace_number() != detail.trace_number {
+                issues.push(IssueKind::NocTraceNumber {
+                    recorded: addendum.trace_number(),
+                    expected: detail.trace_number,
+                });
+            }
+        }
+    }
 }
 
 /// A return entry carries exactly one return addendum and nothing else.

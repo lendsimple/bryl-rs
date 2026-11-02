@@ -5,7 +5,10 @@ use bryl::read::{Dispatch, ReadErrorKind};
 use bryl::{Const, Record};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
-use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
+use crate::codes::{
+    ChangeCode, RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
+    TransactionCode,
+};
 use crate::types::{FileIdModifier, RoutingNumber};
 
 /// Length of every NACHA record.
@@ -255,6 +258,106 @@ pub struct ReturnAddendum {
     pub trace_number: u64,
 }
 
+/// Notification of change addenda record (`7`, addenda type `98`). An entry
+/// in a COR batch carries exactly one, in place of type-05 addenda, to tell
+/// the originator what to correct.
+#[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[bryl(sanitize(upper), length = 94)]
+#[builder(on(String, into))]
+pub struct NocAddendum {
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), constant = "7")]
+    #[builder(skip)]
+    pub record_type: Const,
+    /// Fixed by the format; stores nothing.
+    #[bryl(numeric(2), constant = 98)]
+    #[builder(skip)]
+    pub addenda_type_code: Const,
+    /// What must be corrected.
+    #[bryl(alpha(3))]
+    pub change_code: ChangeCode,
+    /// Trace number of the entry being corrected.
+    #[bryl(numeric(15))]
+    pub original_entry_trace_number: u64,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(6), reserved)]
+    #[builder(skip)]
+    pub reserved: Const,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    #[bryl(numeric(8))]
+    pub original_receiving_dfi_id: u32,
+    /// The corrected values, laid out as [`ChangeCode`] describes for each
+    /// code.
+    #[bryl(alpha(29))]
+    pub corrected_data: String,
+    /// Fixed by the format; stores nothing. IAT corrections use part of it,
+    /// which this library does not support.
+    #[bryl(alpha(15), reserved)]
+    #[builder(skip)]
+    pub reserved_2: Const,
+    /// Trace number of the notification of change itself, the same as its
+    /// entry detail's.
+    #[bryl(numeric(15))]
+    pub trace_number: u64,
+}
+
+/// Refused notification of change addenda record (`7`, addenda type `98`,
+/// refused change code C61–C69): the originator refuses a notification of
+/// change it received, giving the refused notification's change code and
+/// trace sequence.
+#[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
+#[bryl(sanitize(upper), length = 94)]
+#[builder(on(String, into))]
+pub struct RefusedNocAddendum {
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(1), constant = "7")]
+    #[builder(skip)]
+    pub record_type: Const,
+    /// Fixed by the format; stores nothing.
+    #[bryl(numeric(2), constant = 98)]
+    #[builder(skip)]
+    pub addenda_type_code: Const,
+    /// Why the notification of change is refused.
+    #[bryl(alpha(3))]
+    pub refused_change_code: RefusedChangeCode,
+    /// Trace number of the original entry.
+    #[bryl(numeric(15))]
+    pub original_entry_trace_number: u64,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(6), reserved)]
+    #[builder(skip)]
+    pub reserved: Const,
+    /// First eight digits of the original entry's receiving DFI routing
+    /// number.
+    #[bryl(numeric(8))]
+    pub original_receiving_dfi_id: u32,
+    /// The corrected data of the refused notification of change.
+    #[bryl(alpha(29))]
+    pub corrected_data: String,
+    /// Change code of the refused notification of change.
+    #[bryl(alpha(3))]
+    pub change_code: ChangeCode,
+    /// Last seven digits of the refused notification of change's trace
+    /// number.
+    #[bryl(numeric(7))]
+    pub trace_sequence_number: u32,
+    /// Fixed by the format; stores nothing.
+    #[bryl(alpha(5), reserved)]
+    #[builder(skip)]
+    pub reserved_2: Const,
+    /// Trace number of the refused notification of change entry itself, the
+    /// same as its entry detail's.
+    #[bryl(numeric(15))]
+    pub trace_number: u64,
+}
+
+/// True if a type-98 addenda record holds a refused change code (C61–C69),
+/// which selects the [`RefusedNocAddendum`] layout.
+pub(crate) fn is_refused_noc(raw: &[u8]) -> bool {
+    matches!(raw.get(3..5), Some(b"C6"))
+}
+
 /// Company/batch control record (`8`).
 #[derive(Record, Builder, Debug, Clone, PartialEq, Eq)]
 #[bryl(sanitize(upper), length = 94)]
@@ -346,6 +449,10 @@ pub enum NachaRecord {
     Addendum(Addendum),
     /// `7`, addenda type `99`
     ReturnAddendum(ReturnAddendum),
+    /// `7`, addenda type `98`
+    NocAddendum(NocAddendum),
+    /// `7`, addenda type `98` with a refused change code (C61–C69)
+    RefusedNocAddendum(RefusedNocAddendum),
     /// `8`
     BatchControl(BatchControl),
     /// `9`
@@ -371,6 +478,12 @@ impl Dispatch for NachaRecord {
             Some(b'7') if raw.get(1..3) == Some(b"99") => {
                 Self::ReturnAddendum(ReturnAddendum::decode_exact(raw)?)
             }
+            Some(b'7') if raw.get(1..3) == Some(b"98") && is_refused_noc(raw) => {
+                Self::RefusedNocAddendum(RefusedNocAddendum::decode_exact(raw)?)
+            }
+            Some(b'7') if raw.get(1..3) == Some(b"98") => {
+                Self::NocAddendum(NocAddendum::decode_exact(raw)?)
+            }
             Some(b'7') => Self::Addendum(Addendum::decode_exact(raw)?),
             Some(b'8') => Self::BatchControl(BatchControl::decode_exact(raw)?),
             Some(b'9') => Self::FileControl(FileControl::decode_exact(raw)?),
@@ -388,6 +501,8 @@ impl Dispatch for NachaRecord {
             Self::EntryDetail(_) => EntryDetail::NAME,
             Self::Addendum(_) => Addendum::NAME,
             Self::ReturnAddendum(_) => ReturnAddendum::NAME,
+            Self::NocAddendum(_) => NocAddendum::NAME,
+            Self::RefusedNocAddendum(_) => RefusedNocAddendum::NAME,
             Self::BatchControl(_) => BatchControl::NAME,
             Self::FileControl(_) => FileControl::NAME,
             Self::Filler => "Filler",

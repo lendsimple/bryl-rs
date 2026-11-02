@@ -8,7 +8,7 @@ use bryl::read::{Location, ReadErrorKind};
 use common::*;
 use nacha::{
     BatchHeader, EntryDetail, File, FileControl, Issue, IssueKind, NachaRecord, Reader,
-    ReturnReasonCode, SpecialAddendum, TransactionCode,
+    ReturnReasonCode, SpecialAddendum, StandardEntryClass, TransactionCode,
 };
 
 mod structured {
@@ -176,6 +176,23 @@ mod errors {
             err.kind,
             ReadErrorKind::UnexpectedRecord {
                 found: "ReturnAddendum",
+                ..
+            }
+        ));
+        assert_eq!(err.location, Location::Line(5));
+    }
+
+    #[test]
+    fn second_notification_of_change_addendum() {
+        let output = noc_file();
+        let mut lines: Vec<&str> = output.lines().collect();
+        lines.insert(4, lines[3]); // repeat the type-98 addendum
+        let input = lines.join("\n");
+        let err = File::read(input.as_bytes()).unwrap_err();
+        assert!(matches!(
+            err.kind,
+            ReadErrorKind::UnexpectedRecord {
+                found: "NocAddendum",
                 ..
             }
         ));
@@ -376,6 +393,37 @@ mod validate {
         entry.detail.addenda_record_indicator = 0;
         // The control totals still count the removed addendum.
         assert_eq!(kinds(&file)[0], IssueKind::MissingReturnAddendum,);
+    }
+
+    #[test]
+    fn notification_of_change_rules() {
+        let mut file = File::read(noc_file().as_bytes()).unwrap();
+        assert_eq!(kinds(&file), []);
+        let entry = &mut file.batches[0].entries[0];
+        let trace = entry.detail.trace_number;
+        let Some(SpecialAddendum::Noc(addendum)) = &mut entry.special_addendum else {
+            panic!("expected a notification of change addendum");
+        };
+        addendum.trace_number = 1;
+        assert_eq!(
+            kinds(&file),
+            [IssueKind::NocTraceNumber {
+                recorded: 1,
+                expected: trace
+            }]
+        );
+        // The same entry in a PPD batch.
+        let mut file = File::read(noc_file().as_bytes()).unwrap();
+        file.batches[0].header.standard_entry_class = StandardEntryClass::Ppd;
+        assert_eq!(
+            kinds(&file),
+            [
+                IssueKind::UnexpectedNocAddendum {
+                    standard_entry_class: StandardEntryClass::Ppd
+                },
+                IssueKind::MissingReturnAddendum,
+            ]
+        );
     }
 
     #[test]

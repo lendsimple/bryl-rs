@@ -9,8 +9,8 @@ mod common;
 use chrono::NaiveDate;
 use common::*;
 use nacha::{
-    BatchParams, ReturnParams, ReturnReasonCode, ServiceClassCode, StandardEntryClass,
-    TransactionCode, Writer,
+    BatchParams, ChangeCode, NocParams, RefusedChangeCode, RefusedNocParams, ReturnParams,
+    ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode, Writer,
 };
 use pretty_assertions::assert_eq;
 
@@ -212,6 +212,52 @@ fn loan_and_gl_entries() {
 }
 
 #[test]
+fn notifications_of_change() {
+    let output = write(|file| {
+        let mut batch = file.begin_batch(cor_batch_params()).unwrap();
+        // The account number of the original entry was wrong.
+        batch.entry(noc_entry_params()).unwrap();
+        // The original entry debited checking; the account is savings.
+        batch
+            .entry(nacha::EntryParams {
+                special_addendum: Some(
+                    NocParams {
+                        original_entry_trace_number: 91_000_010_000_002,
+                        ..noc_params(ChangeCode::IncorrectTransactionCode, "37")
+                    }
+                    .into(),
+                ),
+                ..named("JOHN DOE", 0, TransactionCode::CheckingReturnedDebit, &[])
+            })
+            .unwrap();
+        // Refusing a notification of change whose trace number was wrong.
+        batch
+            .entry(nacha::EntryParams {
+                special_addendum: Some(
+                    RefusedNocParams::builder()
+                        .refused_change_code(RefusedChangeCode::IncorrectTraceNumber)
+                        .original_entry_trace_number(91_000_010_000_003)
+                        .original_receiving_dfi_id(9_100_001)
+                        .corrected_data("987654321")
+                        .change_code(ChangeCode::IncorrectAccountNumber)
+                        .trace_sequence_number(42)
+                        .build()
+                        .into(),
+                ),
+                ..named(
+                    "ACME SUPPLY",
+                    0,
+                    TransactionCode::SavingsReturnedCredit,
+                    &[],
+                )
+            })
+            .unwrap();
+        batch.finish().unwrap();
+    });
+    assert_snapshot("notifications_of_change.ach", &output);
+}
+
+#[test]
 fn snapshots_read_back_and_validate() {
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         return; // the snapshots are being rewritten by the other tests
@@ -222,6 +268,7 @@ fn snapshots_read_back_and_validate() {
         "two_batches",
         "returns",
         "loan_and_gl_entries",
+        "notifications_of_change",
     ] {
         let file = nacha::File::read(read_snapshot(&format!("{name}.ach")).as_bytes()).unwrap();
         assert_eq!(file.validate(), [], "{name}");
