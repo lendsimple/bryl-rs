@@ -494,6 +494,127 @@ mod base_segment {
     }
 }
 
+mod crrg_rules {
+    use super::*;
+    use metro2::{
+        AccountType, ComplianceConditionCode, File, HeaderRecord, Issue, SpecialComment, Writer,
+    };
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn header_needs_reporter_name_and_address() {
+        // CRRG 2020 header record layout (page 3-7): required fields.
+        assert_eq!(header().validate(), Ok(()));
+        let blank = HeaderRecord {
+            reporter_name: "   ".into(),
+            reporter_address: String::new(),
+            ..header()
+        };
+        assert_eq!(
+            blank.validate(),
+            Err(vec![
+                Violation::HeaderFieldRequired {
+                    field: "reporter_name"
+                },
+                Violation::HeaderFieldRequired {
+                    field: "reporter_address"
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn writer_rejects_an_invalid_header() {
+        let blank = HeaderRecord {
+            reporter_name: String::new(),
+            ..header()
+        };
+        let mut writer = Writer::new(Vec::new());
+        let err = writer.begin_file(&blank).unwrap_err();
+        assert!(matches!(
+            &err,
+            metro2::Error::InvalidHeader { violations }
+                if violations[..] == [Violation::HeaderFieldRequired { field: "reporter_name" }]
+        ));
+        assert_eq!(writer.into_inner(), b"");
+    }
+
+    #[test]
+    fn file_validation_reports_the_header() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(&header()).unwrap();
+        file.write(&DataRecord::new(base())).unwrap();
+        file.finish().unwrap();
+        let mut parsed = File::read(writer.into_inner().as_slice()).unwrap();
+        parsed.header.reporter_address = String::new();
+        assert_eq!(
+            parsed.validate(),
+            [Issue::Header {
+                violation: Violation::HeaderFieldRequired {
+                    field: "reporter_address"
+                }
+            }]
+        );
+    }
+
+    #[test]
+    fn closed_by_grantor_and_at_consumer_request_conflict() {
+        // CRRG 2020 FAQs 39 and 40: only one closed code applies.
+        for code in [
+            ComplianceConditionCode::ClosedAtRequest,
+            ComplianceConditionCode::ClosedAndFcraDispute,
+            ComplianceConditionCode::ClosedAndFcraInvestigated,
+            ComplianceConditionCode::ClosedAndFcbaDispute,
+        ] {
+            let both = BaseSegment {
+                special_comment: Some(SpecialComment::M),
+                compliance_condition_code: Some(code),
+                ..base()
+            };
+            assert_eq!(
+                both.validate(),
+                Err(vec![Violation::ConflictingClosedCodes {
+                    special_comment: SpecialComment::M,
+                    compliance_condition_code: code,
+                }]),
+                "{code:?}"
+            );
+        }
+        // A dispute code is not a closed code.
+        let disputed = BaseSegment {
+            special_comment: Some(SpecialComment::M),
+            compliance_condition_code: Some(ComplianceConditionCode::FcraDispute),
+            ..base()
+        };
+        assert_eq!(disputed.validate(), Ok(()));
+    }
+
+    #[test]
+    fn collection_and_debt_buyer_accounts_need_k1() {
+        // CRRG 2020 K1 Segment (page 4-36) and Exhibit 1: account types 48,
+        // 0C and 77 belong to the reporters that must send K1.
+        for code in ["48", "0C", "77"] {
+            let account_type: AccountType = code.parse().unwrap();
+            assert!(account_type.requires_k1(), "{code}");
+            let record = DataRecord::new(BaseSegment {
+                account_type,
+                ..base()
+            });
+            assert_eq!(
+                record.validate(),
+                Err(vec![Violation::K1Required { account_type }]),
+                "{code}"
+            );
+            let with_k1 = DataRecord {
+                k1: Some(k1()),
+                ..record
+            };
+            assert_eq!(with_k1.validate(), Ok(()), "{code}");
+        }
+        assert!(!AccountType::Unsecured.requires_k1());
+    }
+}
+
 mod characters {
     //! Character rules from the CRRG's field descriptions.
     use super::*;

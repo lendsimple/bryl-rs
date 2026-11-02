@@ -38,6 +38,11 @@ pub enum Issue {
         /// Value in the trailer.
         recorded: u64,
     },
+    /// The header record breaks a rule.
+    Header {
+        /// The rule broken.
+        violation: Violation,
+    },
     /// A data record breaks a rule.
     Violation {
         /// Index of the data record.
@@ -57,6 +62,7 @@ impl fmt::Display for Issue {
                 computed,
                 recorded,
             } => write!(f, "trailer {field} is {recorded}, computed {computed}"),
+            Self::Header { violation } => write!(f, "header: {violation}"),
             Self::Violation {
                 index,
                 account,
@@ -77,10 +83,17 @@ impl File {
         Reader::new(input).read_file()
     }
 
-    /// Recomputes the trailer and checks each data record's rules. The block
-    /// count is checked only for blocked files.
+    /// Checks the header, recomputes the trailer and checks each data
+    /// record's rules. The block count is checked only for blocked files.
     pub fn validate(&self) -> Vec<Issue> {
-        let mut issues = Vec::new();
+        let mut issues: Vec<Issue> = self
+            .header
+            .validate()
+            .err()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|violation| Issue::Header { violation })
+            .collect();
         for (index, record) in self.data_records.iter().enumerate() {
             if let Err(violations) = record.validate() {
                 issues.extend(violations.into_iter().map(|violation| Issue::Violation {

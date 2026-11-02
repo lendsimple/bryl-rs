@@ -194,8 +194,10 @@
 //!
 //! # Rules the writer enforces
 //!
-//! [`FileWriter::write`] checks each record with [`DataRecord::validate`]
-//! and writes nothing for a record that breaks a rule:
+//! [`Writer::begin_file`] checks the header with [`HeaderRecord::validate`]
+//! (the reporter name and address are required), and [`FileWriter::write`]
+//! checks each record with [`DataRecord::validate`]. Nothing is written for
+//! a record that breaks a rule:
 //!
 //! - **Payment rating** against account status, as above.
 //! - **Amount past due** is 0 for statuses 11 (current) and 13 (paid or
@@ -212,6 +214,12 @@
 //! - **Characters** ([`CharClass`]): names allow letters, spaces and
 //!   hyphens; address lines and city also digits, `/`, `-` and `.`;
 //!   consumer account and identification numbers only letters and digits.
+//! - **Closed codes:** special comment M (closed by the credit grantor) and a
+//!   compliance condition code for an account closed at the consumer's
+//!   request (XA, XD, XE, XJ) are not reported together
+//!   ([`validate_closed_codes`]).
+//! - **K1 segment** for collection agency (48), debt buyer (0C) and returned
+//!   check (77) accounts ([`AccountType::requires_k1`]).
 //! - **Retired codes:** account status 05.
 //!
 //! Unknown codes cannot be written at all: every code field is an enum.
@@ -313,29 +321,41 @@
 //!   retiring account status 05 in April 2022, and how to report transfers
 //!   instead.
 //! - **Payment rating rule** ([`AccountStatus::requires_payment_rating`]):
-//!   moov-io/metro2's `ValidatePaymentRating`, Upstart's `metro_2` gem and
-//!   The Mortgage Office's documentation agree; not yet checked against the
-//!   CRRG text.
+//!   CRRG 2020 Fields 17A and 17B (page 4-10); moov-io/metro2's
+//!   `ValidatePaymentRating`, Upstart's `metro_2` gem and The Mortgage
+//!   Office's documentation agree.
+//! - **Amount past due** ([`validate_amount_past_due`]): CRRG 2020 Field 22
+//!   (page 4-14) and Frequently Asked Question 39.
 //! - **Date closed** ([`validate_date_closed`]): CRRG 2020 Field 26
 //!   (page 4-17) and Frequently Asked Questions 34 and 39.
 //! - **Date of first delinquency**
 //!   ([`BaseSegment::requires_date_of_first_delinquency`]): CRRG 2020
 //!   Field 25 (page 4-16).
+//! - **Header required fields** ([`HeaderRecord::validate`]): CRRG 2020
+//!   header record layout (page 3-7).
+//! - **Closed codes** ([`validate_closed_codes`]): CRRG 2020 Frequently
+//!   Asked Questions 39 and 40.
+//! - **K1 segment** ([`AccountType::requires_k1`]): CRRG 2020 K1 Segment
+//!   (page 4-36), which requires it from collection agencies, debt buyers and
+//!   check guarantee companies, and Exhibit 1, which assigns them account
+//!   types 48, 0C and 77.
 //! - **Account status descriptions** ([`AccountStatus`]): Oracle Financial
 //!   Services Lending & Leasing and The Mortgage Office documentation, and the
 //!   `metro_2` gem.
 //! - **[moov-io/metro2](https://github.com/moov-io/metro2):** field positions,
 //!   the trailer totals, and the reference files used in this crate's tests,
-//!   which parse and validate (apart from three character-rule violations in
-//!   the sample data).
+//!   which parse and validate (apart from three character-rule violations
+//!   and a collection account without a K1 segment in the sample data).
 //!
 //! ## Not yet checked
 //!
-//! Rules that need the CRRG text before they are checked, because only one
-//! public source states them or the sources disagree: the header record's
-//! required fields; the special comment and compliance condition codes each status
-//! allows; ECOA and consumer information indicator rules; and when a K1
-//! segment is required.
+//! The CRRG gives guidance on these rather than a rule that can be checked
+//! field by field, so they are not checked: the special comment and
+//! compliance condition codes each status and portfolio type allows
+//! (Exhibits 6-8); ECOA codes T and X, which depend on earlier reports and
+//! on confirmation of a death (Frequently Asked Question 14); future
+//! activity dates; and when a consumer's SSN or date of birth may be
+//! omitted.
 
 mod codes;
 mod data_record;
@@ -367,8 +387,8 @@ pub use records::{
 };
 pub use validate::{
     CharClass, Violation, is_valid_dob, is_valid_phone, is_valid_ssn, validate_amount_past_due,
-    validate_date_closed, validate_date_of_first_delinquency, validate_payment_history,
-    validate_payment_rating,
+    validate_closed_codes, validate_date_closed, validate_date_of_first_delinquency,
+    validate_payment_history, validate_payment_rating,
 };
 pub use writer::{FileWriter, Writer};
 

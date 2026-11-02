@@ -8,6 +8,13 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- `bryl-metro2` checks more CRRG 2020 rules: the header's reporter name
+  and address are required (`HeaderRecord::validate`, checked by
+  `Writer::begin_file` and reported by `File::validate` as `Issue::Header`);
+  special comment M is not combined with a "closed at the consumer's
+  request" compliance condition code (`validate_closed_codes`); and
+  collection agency, debt buyer and returned check accounts (types 48, 0C,
+  77) report a K1 segment (`AccountType::requires_k1`).
 - `bryl-metro2` checks the date closed and the date of first delinquency
   (DOFD) against the 2020 CRRG. Paid accounts (statuses 13 and 61-65)
   report a date closed; charged-off installment and mortgage accounts don't.

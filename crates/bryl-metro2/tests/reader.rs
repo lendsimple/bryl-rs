@@ -524,8 +524,10 @@ mod moov {
         File::read(fixture("moov/unpacked_fixed_file.dat").as_bytes()).unwrap()
     }
 
-    /// moov-io's sample data breaks the CRRG character rules in three places.
-    fn sample_character_issues() -> Vec<Issue> {
+    /// moov-io's sample data breaks the CRRG character rules in three places,
+    /// and reports a collection agency account (type 48) without the K1
+    /// segment the CRRG requires.
+    fn sample_issues() -> Vec<Issue> {
         let issue = |field: &str, ch, position, allowed| Issue::Violation {
             index: 0,
             account: "553723456".into(),
@@ -545,13 +547,20 @@ mod moov {
                 3,
                 CharClass::Identifier,
             ),
+            Issue::Violation {
+                index: 0,
+                account: "553723456".into(),
+                violation: metro2::Violation::K1Required {
+                    account_type: metro2::AccountType::CollectionAgency,
+                },
+            },
         ]
     }
 
     #[test]
     fn fixed_file_validates() {
-        // The trailer matches; only moov-io's sample text breaks the rules.
-        assert_eq!(fixed_file().validate(), sample_character_issues());
+        // The trailer matches; only moov-io's sample data breaks the rules.
+        assert_eq!(fixed_file().validate(), sample_issues());
     }
 
     #[test]
@@ -619,7 +628,7 @@ mod moov {
         assert_eq!(file.trailer.total_base_records, 1);
         assert_eq!(file.trailer.block_count, 3);
         assert_eq!(file.blocks, 0);
-        assert_eq!(file.validate(), sample_character_issues());
+        assert_eq!(file.validate(), sample_issues());
     }
 
     #[test]
@@ -636,7 +645,7 @@ mod moov {
         // One block plus two records outside blocks; the trailer says 3.
         assert_eq!(file.blocks, 3);
         assert_eq!(file.trailer.block_count, 3);
-        assert_eq!(file.validate(), sample_character_issues());
+        assert_eq!(file.validate(), sample_issues());
     }
 
     #[test]
