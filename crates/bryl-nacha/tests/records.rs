@@ -810,7 +810,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingReturnedCredit),
             addenda: vec![],
-            return_addendum: None,
+            special_addendum: None,
         };
         assert!(entry.is_rejection());
     }
@@ -820,7 +820,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
-            return_addendum: None,
+            special_addendum: None,
         };
         assert!(!entry.is_rejection());
     }
@@ -830,7 +830,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
-            return_addendum: None,
+            special_addendum: None,
         };
         assert_eq!(
             entry.mask().detail.receiving_dfi_account_number,
@@ -846,7 +846,7 @@ mod entry {
                 ..entry_detail(TransactionCode::CheckingCredit)
             },
             addenda: vec![addendum("ADD INFO", 1)],
-            return_addendum: None,
+            special_addendum: None,
         };
         let encoded = entry.encode().unwrap();
         assert_eq!(encoded.len(), 94 * 2 + 1);
@@ -864,7 +864,7 @@ mod entry {
                 ..entry_detail(TransactionCode::CheckingReturnedDebit)
             },
             addenda: vec![],
-            return_addendum: Some(return_addendum(None)),
+            special_addendum: Some(return_addendum(None).into()),
         };
         assert_eq!(entry.addenda_count(), 1);
         let encoded = entry.encode().unwrap();
@@ -877,7 +877,7 @@ mod entry {
         let entry = Entry {
             detail: entry_detail(TransactionCode::CheckingCredit),
             addenda: vec![],
-            return_addendum: None,
+            special_addendum: None,
         };
         assert_eq!(entry.encode().unwrap().len(), 94);
     }

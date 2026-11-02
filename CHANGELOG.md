@@ -25,6 +25,11 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- **Breaking:** `Entry::return_addendum` and `EntryParams::return_addendum`
+  are replaced by `special_addendum`, holding a `SpecialAddendum` (or
+  `SpecialAddendumParams`): the one addendum a return entry carries in place
+  of type-05 addenda. `Entry::return_addendum()` returns the return addendum,
+  and `EntryParams::builder().special_addendum(..)` accepts a `ReturnParams`.
 - **Breaking:** `TransactionCode::for_entry` returns `Option`: there is no
   loan debit prenote.
 - `TransactionCode::is_credit` covers x1–x4 and `is_debit` x5–x9, so

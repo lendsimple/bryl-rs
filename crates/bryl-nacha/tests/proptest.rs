@@ -95,7 +95,7 @@ fn entry(
                     .individual_id(id)
                     .individual_name(name)
                     .addenda(addenda)
-                    .maybe_return_addendum(returned)
+                    .maybe_special_addendum(returned)
                     .build()
             },
         )

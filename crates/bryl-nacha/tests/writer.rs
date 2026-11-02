@@ -817,7 +817,7 @@ mod returns {
         let control = batch.finish().unwrap();
         file.finish().unwrap();
 
-        let addendum = entry.return_addendum.unwrap();
+        let addendum = entry.return_addendum().unwrap();
         assert_eq!(entry.detail.addenda_record_indicator, 1);
         assert_eq!(addendum.trace_number, entry.detail.trace_number);
         assert_eq!(addendum.original_entry_trace_number, 91_000_010_000_001);
@@ -845,7 +845,7 @@ mod returns {
     #[test]
     fn return_addendum_needs_return_code() {
         let kind = rejected(EntryParams {
-            return_addendum: Some(return_params(ReturnReasonCode::AccountClosed)),
+            special_addendum: Some(return_params(ReturnReasonCode::AccountClosed).into()),
             ..entry_params(TransactionCode::CheckingDebit, 2500, &[])
         });
         assert_eq!(
@@ -869,10 +869,13 @@ mod returns {
     fn date_of_death_only_for_deaths() {
         let date = NaiveDate::from_ymd_opt(2024, 3, 9);
         let with_date = |code| EntryParams {
-            return_addendum: Some(ReturnParams {
-                date_of_death: date,
-                ..return_params(code)
-            }),
+            special_addendum: Some(
+                ReturnParams {
+                    date_of_death: date,
+                    ..return_params(code)
+                }
+                .into(),
+            ),
             ..return_entry_params(code)
         };
         let kind = rejected(with_date(ReturnReasonCode::AccountClosed));
@@ -883,6 +886,6 @@ mod returns {
             }
         );
         let entry = write_return(with_date(ReturnReasonCode::AccountHolderDeceased)).unwrap();
-        assert_eq!(entry.return_addendum.unwrap().date_of_death, date);
+        assert_eq!(entry.return_addendum().unwrap().date_of_death, date);
     }
 }

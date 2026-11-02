@@ -274,9 +274,9 @@
 //!
 //! # Returns
 //!
-//! A return entry has a "returned" transaction code (21, 26, 31 or 36) and a
-//! type-99 [`ReturnAddendum`] in [`Entry::return_addendum`] instead of
-//! type-05 addenda. It gives the [`ReturnReasonCode`] and the trace number
+//! A return entry has a "returned" transaction code (x1 or x6, such as 21 or
+//! 26) and a type-99 [`ReturnAddendum`] instead of type-05 addenda, held in
+//! [`Entry::special_addendum`] and returned by [`Entry::return_addendum`]. It gives the [`ReturnReasonCode`] and the trace number
 //! of the entry being returned:
 //!
 //! ```
@@ -293,7 +293,7 @@
 //! #     batch.entry(EntryParams::builder().transaction_code(TransactionCode::CheckingReturnedDebit)
 //! #         .receiving_dfi("091000019".parse()?).account_number("123").amount(2_500)
 //! #         .individual_id("LOAN0001").individual_name("JANE SMITH")
-//! #         .return_addendum(ReturnParams::builder().return_reason_code(ReturnReasonCode::InsufficientFunds)
+//! #         .special_addendum(ReturnParams::builder().return_reason_code(ReturnReasonCode::InsufficientFunds)
 //! #             .original_entry_trace_number(91_000_010_000_001).original_receiving_dfi_id(2_100_002).build())
 //! #         .build())?;
 //! #     batch.finish()?;
@@ -305,7 +305,7 @@
 //!
 //! let file = nacha::File::read(returns.as_bytes())?;
 //! for entry in file.batches.iter().flat_map(|batch| &batch.entries) {
-//!     if let Some(returned) = &entry.return_addendum {
+//!     if let Some(returned) = entry.return_addendum() {
 //!         println!(
 //!             "{:015} returned: {}",
 //!             returned.original_entry_trace_number, returned.return_reason_code
@@ -316,7 +316,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! To write a return, give [`EntryParams::return_addendum`] a
+//! To write a return, give [`EntryParams::special_addendum`] a
 //! [`ReturnParams`]; the writer fills in the addendum's trace number.
 //!
 //! # Configuration
@@ -410,7 +410,7 @@ pub use bryl::Sanitize;
 pub use codes::{
     AccountKind, REVERSAL, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
 };
-pub use entry::Entry;
+pub use entry::{Entry, SpecialAddendum};
 pub use error::Error;
 pub use file::{Batch, File};
 pub use reader::{Entries, Reader};
@@ -422,7 +422,8 @@ pub use totals::{HASH_MODULUS, Totals};
 pub use types::{FileIdModifier, FileIdModifierError, RoutingNumber, RoutingNumberError};
 pub use validate::{Issue, IssueKind};
 pub use writer::{
-    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, ReturnParams, Writer,
+    BatchParams, BatchWriter, EntryParams, FileParams, FileWriter, LineEnding, ReturnParams,
+    SpecialAddendumParams, Writer,
 };
 
 /// Runs the code in README.md as doctests.
