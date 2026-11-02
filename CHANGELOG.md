@@ -61,6 +61,14 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- **Breaking:** `metro2::AccountType` variants are named after CRRG 2020
+  Exhibit 1. Many were wrong: for example `0A` is `TimeShareLoan` (it was
+  `AutoLease`, which is `3A`), `0C` is `DebtBuyer` (it was
+  `RealEstateJuniorLiens`, which is `5A`), and 70-75 are the government
+  debts (`GovernmentOverpayment` through `GovernmentBenefit`). Every
+  variant now documents its CRRG description.
+- **Breaking:** account types 22 and 23, obsolete since September 2011, and
+  78, which the CRRG does not define, are no longer accepted.
 - **Breaking:** `nacha::Batch` has an `unread_entries` field, empty unless
   the file was read leniently.
 - **Breaking:** `Entry::return_addendum` and `EntryParams::return_addendum`

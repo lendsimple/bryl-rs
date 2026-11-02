@@ -24,208 +24,203 @@ pub enum PortfolioType {
     Revolving,
 }
 
-/// Account type.
+/// Account type, as listed in CRRG 2020 Exhibit 1.
+///
+/// Codes 22 (secured by household goods), 23 (secured by household goods and
+/// other collateral) and 1C (household goods) are obsolete as of September
+/// 2011 and are not accepted.
 #[derive(Code, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AccountType {
-    /// `00`
+    /// `00`: Auto.
     #[code("00")]
     Auto,
-    /// `01`
+    /// `01`: Unsecured.
     #[code("01")]
     Unsecured,
-    /// `02`
+    /// `02`: Secured.
     #[code("02")]
     Secured,
-    /// `03`
+    /// `03`: Partially secured.
     #[code("03")]
     PartiallySecured,
-    /// `04`
+    /// `04`: Home improvement.
     #[code("04")]
     HomeImprovement,
-    /// `05`
+    /// `05`: FHA home improvement.
     #[code("05")]
     FhaHomeImprovement,
-    /// `06`
+    /// `06`: Installment sales contract.
     #[code("06")]
     InstallmentSalesContract,
-    /// `07`
+    /// `07`: Charge account.
     #[code("07")]
     ChargeAccount,
-    /// `08`
+    /// `08`: Real estate, specific type unknown (terms duration in years).
     #[code("08")]
     RealEstateSpecific,
-    /// `0A`
+    /// `0A`: Time share loan.
     #[code("0A")]
-    AutoLease,
-    /// `0C`
+    TimeShareLoan,
+    /// `0C`: Debt buyer.
     #[code("0C")]
-    RealEstateJuniorLiens,
-    /// `0F`
+    DebtBuyer,
+    /// `0F`: Construction loan.
     #[code("0F")]
-    FlexibleSpendingCreditCard,
-    /// `0G`
+    ConstructionLoan,
+    /// `0G`: Flexible spending credit card.
     #[code("0G")]
-    ManufacturedHousing,
-    /// `10`
+    FlexibleSpendingCreditCard,
+    /// `10`: Business loan.
     #[code("10")]
     Business,
-    /// `11`
+    /// `11`: Recreational merchandise.
     #[code("11")]
     RecreationalMerchandise,
-    /// `12`
+    /// `12`: Education.
     #[code("12")]
     Education,
-    /// `13`
+    /// `13`: Lease.
     #[code("13")]
     Lease,
-    /// `15`
+    /// `15`: Line of credit.
     #[code("15")]
-    CheckCredit,
-    /// `17`
+    LineOfCredit,
+    /// `17`: Manufactured housing.
     #[code("17")]
-    MobileHome,
-    /// `18`
+    ManufacturedHousing,
+    /// `18`: Credit card.
     #[code("18")]
     CreditCard,
-    /// `19`
+    /// `19`: FHA real estate mortgage (terms duration in years).
     #[code("19")]
     FhaRealEstateMortgage,
-    /// `20`
+    /// `20`: Note loan.
     #[code("20")]
     NoteLoan,
-    /// `22`
-    #[code("22")]
-    SecuredByHouseholdGoods,
-    /// `23`
-    #[code("23")]
-    SecuredByHhgAndOther,
-    /// `25`
+    /// `25`: VA real estate mortgage (terms duration in years).
     #[code("25")]
     VaRealEstateMortgage,
-    /// `26`
+    /// `26`: Conventional real estate mortgage, including purchase money first (terms duration in years).
     #[code("26")]
     ConventionalRealEstate,
-    /// `29`
+    /// `29`: Rental agreement.
     #[code("29")]
     RentalAgreement,
-    /// `2A`
+    /// `2A`: Secured credit card.
     #[code("2A")]
     SecuredCreditCard,
-    /// `2C`
+    /// `2C`: USDA real estate mortgage loan (terms duration in years).
     #[code("2C")]
-    CommercialLineOfCredit,
-    /// `37`
+    UsdaRealEstateMortgage,
+    /// `37`: Combined credit plan.
     #[code("37")]
     CombinedCreditPlan,
-    /// `3A`
+    /// `3A`: Auto lease.
     #[code("3A")]
-    Agricultural,
-    /// `43`
+    AutoLease,
+    /// `43`: Debit card.
     #[code("43")]
     DebitCard,
-    /// `47`
+    /// `47`: Credit line secured.
     #[code("47")]
     CreditLineSecured,
-    /// `48`
+    /// `48`: Collection agency or attorney.
     #[code("48")]
     CollectionAgency,
-    /// `4D`
+    /// `4D`: Telecommunications or cellular.
     #[code("4D")]
-    CommercialInstallment,
-    /// `50`
+    TelecommunicationsCellular,
+    /// `50`: Family support.
     #[code("50")]
     FamilySupport,
-    /// `5A`
+    /// `5A`: Real estate junior liens and non-purchase money first (terms duration in years).
     #[code("5A")]
-    GovernmentEmployeeAdvance,
-    /// `5B`
+    RealEstateJuniorLiens,
+    /// `5B`: Second mortgage (terms duration in years).
     #[code("5B")]
-    GovernmentFeeForServices,
-    /// `65`
+    SecondMortgage,
+    /// `65`: Government unsecured guaranteed loan.
     #[code("65")]
     GovtUnsecuredGuaranteed,
-    /// `66`
+    /// `66`: Government secured guaranteed loan.
     #[code("66")]
     GovtSecuredGuaranteed,
-    /// `67`
+    /// `67`: Government unsecured direct loan.
     #[code("67")]
     GovtUnsecuredDirect,
-    /// `68`
+    /// `68`: Government secured direct loan.
     #[code("68")]
     GovtSecuredDirect,
-    /// `69`
+    /// `69`: Government grant.
     #[code("69")]
     GovernmentGrant,
-    /// `6A`
+    /// `6A`: Commercial installment loan.
     #[code("6A")]
-    GovernmentOverpayment,
-    /// `6B`
+    CommercialInstallmentLoan,
+    /// `6B`: Commercial mortgage loan (terms duration in years).
     #[code("6B")]
-    GovernmentFine,
-    /// `6D`
+    CommercialMortgageLoan,
+    /// `6D`: Home equity.
     #[code("6D")]
-    GovernmentMiscellaneous,
-    /// `70`
+    HomeEquity,
+    /// `70`: Government overpayment.
     #[code("70")]
-    GovernmentPurchaseProgram70,
-    /// `71`
+    GovernmentOverpayment,
+    /// `71`: Government fine.
     #[code("71")]
-    GovernmentPurchaseProgram71,
-    /// `72`
+    GovernmentFine,
+    /// `72`: Government fee for services.
     #[code("72")]
-    GovernmentPurchaseProgram72,
-    /// `73`
+    GovernmentFeeForServices,
+    /// `73`: Government employee advance.
     #[code("73")]
-    GovernmentPurchaseProgram73,
-    /// `74`
+    GovernmentEmployeeAdvance,
+    /// `74`: Government miscellaneous debt.
     #[code("74")]
-    GovernmentPurchaseProgram74,
-    /// `75`
+    GovernmentMiscellaneousDebt,
+    /// `75`: Government benefit.
     #[code("75")]
-    GovernmentPurchaseProgram75,
-    /// `77`
+    GovernmentBenefit,
+    /// `77`: Returned check.
     #[code("77")]
     ReturnedCheck,
-    /// `7A`
+    /// `7A`: Commercial line of credit.
     #[code("7A")]
-    HomeEquityLineOfCredit7a,
-    /// `7B`
+    CommercialLineOfCredit,
+    /// `7B`: Agricultural.
     #[code("7B")]
-    HomeEquityLineOfCredit7b,
-    /// `89`
+    Agricultural,
+    /// `89`: Home equity line of credit.
     #[code("89")]
-    HomeEquityInstallment,
-    /// `8A`
+    HomeEquityLineOfCredit,
+    /// `8A`: Business credit card.
     #[code("8A")]
-    HomeEquityLineOfCredit8a,
-    /// `8B`
+    BusinessCreditCard,
+    /// `8B`: Deposit account with overdraft protection.
     #[code("8B")]
-    HomeEquityLineOfCredit8b,
-    /// `90`
+    DepositAccountWithOverdraftProtection,
+    /// `90`: Medical debt.
     #[code("90")]
     MedicalDebt,
-    /// `91`
+    /// `91`: Debt consolidation.
     #[code("91")]
     DebtConsolidation,
-    /// `92`
+    /// `92`: Utility company.
     #[code("92")]
     UtilityCompany,
-    /// `93`
+    /// `93`: Child support.
     #[code("93")]
     ChildSupport,
-    /// `95`
+    /// `95`: Attorney fees.
     #[code("95")]
-    TelecomCellular,
-    /// `9A`
+    AttorneyFees,
+    /// `9A`: Secured home improvement.
     #[code("9A")]
-    CommercialMortgage,
-    /// `9B`
+    SecuredHomeImprovement,
+    /// `9B`: Business line personally guaranteed.
     #[code("9B")]
-    CommercialSecured,
-    /// `78`
-    #[code("78")]
-    InstallmentLoan,
+    BusinessLinePersonallyGuaranteed,
 }
 
 /// Account status: the account's condition as of the date of account
