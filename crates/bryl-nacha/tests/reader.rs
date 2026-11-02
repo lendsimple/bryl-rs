@@ -8,7 +8,7 @@ use bryl::read::{Location, ReadErrorKind};
 use common::*;
 use nacha::{
     BatchHeader, EntryDetail, File, FileControl, Issue, IssueKind, NachaRecord, Reader,
-    ReturnReasonCode, TransactionCode,
+    ReturnReasonCode, SpecialAddendum, TransactionCode,
 };
 
 mod structured {
@@ -346,7 +346,7 @@ mod validate {
     fn return_entries() {
         let file = File::read(return_file().as_bytes()).unwrap();
         let entry = &file.batches[0].entries[0];
-        let addendum = entry.return_addendum.as_ref().unwrap();
+        let addendum = entry.return_addendum().unwrap();
         assert!(entry.is_rejection());
         assert_eq!(
             addendum.return_reason_code,
@@ -360,7 +360,10 @@ mod validate {
         let mut file = File::read(return_file().as_bytes()).unwrap();
         let entry = &mut file.batches[0].entries[0];
         let trace = entry.detail.trace_number;
-        entry.return_addendum.as_mut().unwrap().trace_number = 1;
+        let Some(SpecialAddendum::Return(addendum)) = &mut entry.special_addendum else {
+            panic!("expected a return addendum");
+        };
+        addendum.trace_number = 1;
         assert_eq!(
             kinds(&file),
             [IssueKind::ReturnTraceNumber {
@@ -369,7 +372,7 @@ mod validate {
             }]
         );
         let entry = &mut file.batches[0].entries[0];
-        entry.return_addendum = None;
+        entry.special_addendum = None;
         entry.detail.addenda_record_indicator = 0;
         // The control totals still count the removed addendum.
         assert_eq!(kinds(&file)[0], IssueKind::MissingReturnAddendum,);

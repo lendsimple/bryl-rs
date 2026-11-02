@@ -272,7 +272,7 @@ pub(crate) fn entry_issues(batch: &BatchHeader, entry: &Entry) -> Vec<IssueKind>
     if code.is_return() && sec != StandardEntryClass::Cor {
         return_issues(entry, &mut issues);
     } else {
-        if entry.return_addendum.is_some() {
+        if entry.return_addendum().is_some() {
             issues.push(IssueKind::UnexpectedReturnAddendum {
                 transaction_code: code,
             });
@@ -310,7 +310,7 @@ fn return_issues(entry: &Entry, issues: &mut Vec<IssueKind>) {
             count: entry.addenda.len(),
         });
     }
-    let Some(addendum) = &entry.return_addendum else {
+    let Some(addendum) = entry.return_addendum() else {
         issues.push(IssueKind::MissingReturnAddendum);
         return;
     };

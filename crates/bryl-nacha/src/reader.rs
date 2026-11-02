@@ -101,17 +101,19 @@ impl<R: BufRead> Reader<R> {
         let mut entry = Entry {
             detail,
             addenda: Vec::new(),
-            return_addendum: None,
+            special_addendum: None,
         };
-        let has_return = |entry: &Entry| entry.return_addendum.is_some();
+        let has_special = |entry: &Entry| entry.special_addendum.is_some();
         while let Some(record) = self.inner.next_if(|record| match record {
             NachaRecord::Addendum(_) => Ok(record),
-            NachaRecord::ReturnAddendum(_) if !has_return(&entry) => Ok(record),
+            NachaRecord::ReturnAddendum(_) if !has_special(&entry) => Ok(record),
             other => Err(other),
         })? {
             match record {
                 NachaRecord::Addendum(addendum) => entry.addenda.push(addendum),
-                NachaRecord::ReturnAddendum(addendum) => entry.return_addendum = Some(addendum),
+                NachaRecord::ReturnAddendum(addendum) => {
+                    entry.special_addendum = Some(addendum.into());
+                }
                 _ => unreachable!("selected above"),
             }
         }

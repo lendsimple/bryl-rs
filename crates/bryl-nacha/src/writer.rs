@@ -7,7 +7,7 @@ use bryl::{EncodeCx, Record, Sanitize};
 use chrono::{NaiveDate, NaiveDateTime};
 
 use crate::codes::{ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode};
-use crate::entry::Entry;
+use crate::entry::{Entry, SpecialAddendum};
 use crate::error::Error;
 use crate::records::{
     Addendum, BatchControl, BatchHeader, EntryDetail, FILLER, FileControl, FileHeader,
@@ -186,7 +186,7 @@ pub struct BatchParams {
 }
 
 /// Entry detail values. Each string in `addenda` becomes an addendum's
-/// payment related information; a return entry sets `return_addendum`
+/// payment related information; a return entry sets `special_addendum`
 /// instead.
 #[derive(Builder, Debug, Clone, PartialEq, Eq)]
 #[builder(on(String, into))]
@@ -211,8 +211,25 @@ pub struct EntryParams {
     /// Payment related information, one addendum each.
     #[builder(default)]
     pub addenda: Vec<String>,
-    /// For a return entry, its type-99 addendum.
-    pub return_addendum: Option<ReturnParams>,
+    /// For a return entry, its type-99 addendum. Accepts a
+    /// [`ReturnParams`] directly.
+    #[builder(into)]
+    pub special_addendum: Option<SpecialAddendumParams>,
+}
+
+/// Values for the one addendum a return entry carries in place of type-05
+/// addenda; see [`SpecialAddendum`](crate::SpecialAddendum).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SpecialAddendumParams {
+    /// A return (addenda type 99).
+    Return(ReturnParams),
+}
+
+impl From<ReturnParams> for SpecialAddendumParams {
+    fn from(params: ReturnParams) -> Self {
+        Self::Return(params)
+    }
 }
 
 /// Return addendum values. The addendum's trace number is the return entry's.
@@ -468,7 +485,7 @@ impl<W: Write> BatchWriter<'_, '_, W> {
             .individual_name(params.individual_name)
             .discretionary_data(params.discretionary_data)
             .addenda_record_indicator(u8::from(
-                !params.addenda.is_empty() || params.return_addendum.is_some(),
+                !params.addenda.is_empty() || params.special_addendum.is_some(),
             ))
             .trace_number(trace_number)
             .build();
@@ -484,20 +501,13 @@ impl<W: Write> BatchWriter<'_, '_, W> {
                     .build()
             })
             .collect();
-        let return_addendum = params.return_addendum.map(|params| {
-            ReturnAddendum::builder()
-                .return_reason_code(params.return_reason_code)
-                .original_entry_trace_number(params.original_entry_trace_number)
-                .maybe_date_of_death(params.date_of_death)
-                .original_receiving_dfi_id(params.original_receiving_dfi_id)
-                .addenda_information(params.addenda_information)
-                .trace_number(detail.trace_number)
-                .build()
-        });
+        let special_addendum = params
+            .special_addendum
+            .map(|params| special_addendum(params, detail.trace_number));
         let entry = Entry {
             detail,
             addenda,
-            return_addendum,
+            special_addendum,
         };
         if let Some(issue) = entry_issues(&self.header, &entry).into_iter().next() {
             return Err(Error::InvalidEntry(issue));
@@ -508,8 +518,9 @@ impl<W: Write> BatchWriter<'_, '_, W> {
         for addendum in &entry.addenda {
             self.file.encode(addendum, &mut buf)?;
         }
-        if let Some(addendum) = &entry.return_addendum {
-            self.file.encode(addendum, &mut buf)?;
+        match &entry.special_addendum {
+            Some(SpecialAddendum::Return(addendum)) => self.file.encode(addendum, &mut buf)?,
+            None => {}
         }
         let records = u32::try_from(entry.addenda_count() + 1).unwrap_or(u32::MAX);
         self.file.emit(&buf, records)?;
@@ -540,5 +551,20 @@ impl<W: Write> BatchWriter<'_, '_, W> {
         self.file.totals.add(&self.totals);
         self.file.batch_count += 1;
         Ok(control)
+    }
+}
+
+/// Builds an entry's special addendum; its trace number is the entry's.
+fn special_addendum(params: SpecialAddendumParams, trace_number: u64) -> SpecialAddendum {
+    match params {
+        SpecialAddendumParams::Return(params) => ReturnAddendum::builder()
+            .return_reason_code(params.return_reason_code)
+            .original_entry_trace_number(params.original_entry_trace_number)
+            .maybe_date_of_death(params.date_of_death)
+            .original_receiving_dfi_id(params.original_receiving_dfi_id)
+            .addenda_information(params.addenda_information)
+            .trace_number(trace_number)
+            .build()
+            .into(),
     }
 }

@@ -134,12 +134,15 @@ fn returns() {
             .unwrap();
         batch
             .entry(nacha::EntryParams {
-                return_addendum: Some(ReturnParams {
-                    original_entry_trace_number: 91_000_010_000_002,
-                    date_of_death: NaiveDate::from_ymd_opt(2023, 5, 1),
-                    addenda_information: "SSA NOTICE".into(),
-                    ..return_params(ReturnReasonCode::AccountHolderDeceased)
-                }),
+                special_addendum: Some(
+                    ReturnParams {
+                        original_entry_trace_number: 91_000_010_000_002,
+                        date_of_death: NaiveDate::from_ymd_opt(2023, 5, 1),
+                        addenda_information: "SSA NOTICE".into(),
+                        ..return_params(ReturnReasonCode::AccountHolderDeceased)
+                    }
+                    .into(),
+                ),
                 ..named("JOHN DOE", 1500, TransactionCode::SavingsReturnedDebit, &[])
             })
             .unwrap();

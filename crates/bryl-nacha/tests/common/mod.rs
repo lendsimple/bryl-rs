@@ -94,7 +94,7 @@ pub fn return_params(return_reason_code: ReturnReasonCode) -> ReturnParams {
 /// A return of a checking debit.
 pub fn return_entry_params(return_reason_code: ReturnReasonCode) -> EntryParams {
     EntryParams {
-        return_addendum: Some(return_params(return_reason_code)),
+        special_addendum: Some(return_params(return_reason_code).into()),
         ..entry_params(TransactionCode::CheckingReturnedDebit, 2500, &[])
     }
 }
