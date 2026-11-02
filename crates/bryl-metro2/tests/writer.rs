@@ -372,6 +372,26 @@ mod validation {
     }
 
     #[test]
+    fn paid_account_without_date_closed_rejected() {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(&header()).unwrap();
+        let paid = DataRecord::new(BaseSegment {
+            account_status: AccountStatus::PaidOrClosed,
+            payment_rating: Some(PaymentRating::Current),
+            ..base()
+        });
+        let err = file.write(&paid).unwrap_err();
+        assert!(matches!(
+            &err,
+            Error::Invalid { violations, .. }
+                if violations[..] == [Violation::DateClosedRequired {
+                    status: AccountStatus::PaidOrClosed
+                }]
+        ));
+        file.finish().unwrap();
+    }
+
+    #[test]
     fn validation_can_be_disabled() {
         let mut writer = Writer::new(Vec::new()).validate(false);
         let mut file = writer.begin_file(&header()).unwrap();

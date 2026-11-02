@@ -95,7 +95,18 @@ fn base() -> impl Strategy<Value = BaseSegment> {
                     .current_balance(balance)
                     .amount_past_due(past_due)
                     .date_of_account_information(as_of)
-                    .maybe_date_closed(closed)
+                    // Paid accounts report when they closed, and charge-offs
+                    // when they first became delinquent.
+                    .maybe_date_closed(if status.requires_date_closed() {
+                        closed.or(Some(as_of))
+                    } else {
+                        closed
+                    })
+                    .maybe_date_of_first_delinquency(
+                        status
+                            .requires_date_of_first_delinquency()
+                            .then_some(opened),
+                    )
                     .surname(surname)
                     .first_name(first)
                     .social_security_number(ssn)
