@@ -16,12 +16,21 @@ include = ["src/**", "tests/**", "README.md", "LICENSE"]
 bryl-derive.workspace = true
 bryl-pattern.workspace = true
 chrono.workspace = true
+serde = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
 pretty_assertions.workspace = true
+serde_json.workspace = true
 trybuild.workspace = true
+
+[features]
+# Serialize code tables as their codes, and errors.
+serde = ["dep:serde"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true

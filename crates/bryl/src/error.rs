@@ -2,6 +2,7 @@ use thiserror::Error;
 
 /// Why a single field value could not be encoded or decoded.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum FieldErrorKind {
     /// The value does not fit in the field.
@@ -85,6 +86,7 @@ pub enum FieldErrorKind {
 
 /// An error encoding or decoding a record.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum Error {
     /// A field could not be encoded or decoded.
