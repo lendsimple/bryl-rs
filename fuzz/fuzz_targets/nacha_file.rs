@@ -7,6 +7,9 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(file) = nacha::File::read(data) {
         let _ = file.validate();
     }
+    if let Ok(file) = nacha::File::read_lenient(data) {
+        let _ = file.validate();
+    }
     for record in nacha::Reader::new(data).take(64) {
         if record.is_err() {
             break;

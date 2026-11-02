@@ -278,6 +278,64 @@
 //! with [`Reader::with_name`]) and the line, e.g.
 //! `ach.txt @ line 4 - unexpected record type FileControl, expected BatchControl`.
 //!
+//! # Lenient reading
+//!
+//! [`File::read`] fails on the first record that does not decode.
+//! [`File::read_lenient`] keeps an entry whose detail or addenda fail to
+//! decode (a routing number with a bad check digit, a code this crate does
+//! not know) as an [`UnreadEntry`] in [`Batch::unread_entries`], so the rest
+//! of an inbound file can still be processed. An unread entry keeps its raw
+//! lines, and [`UnreadEntry::detail_field`] decodes the fields that are
+//! intact, such as the trace number and amount, so the entry can be routed
+//! by hand. [`File::validate`] reports an [`IssueKind::UnreadEntry`] for
+//! each one, and doesn't check the control totals they affect.
+//!
+//! ```
+//! # fn sample() -> Result<String, Box<dyn std::error::Error>> {
+//! #     use nacha::*;
+//! #     let created_at = chrono::NaiveDate::from_ymd_opt(2024, 1, 31).unwrap().and_hms_opt(9, 0, 0).unwrap();
+//! #     let mut writer = Writer::new(Vec::new());
+//! #     let mut file = writer.begin_file(FileParams::builder().immediate_destination("091000019".parse()?)
+//! #         .immediate_destination_name("DEST").immediate_origin("1234567890").immediate_origin_name("ACME")
+//! #         .created_at(created_at).build())?;
+//! #     let mut batch = file.begin_batch(BatchParams::builder().service_class_code(ServiceClassCode::CreditsOnly)
+//! #         .company_name("ACME").company_id("1234567890").standard_entry_class(StandardEntryClass::Ppd)
+//! #         .company_entry_description("PAYOUT").originating_dfi_id(9_100_001).build())?;
+//! #     for amount in [1_000, 2_500] {
+//! #         batch.entry(EntryParams::builder().transaction_code(TransactionCode::CheckingCredit)
+//! #             .receiving_dfi("021000021".parse()?).account_number("123").amount(amount)
+//! #             .individual_id("ID").individual_name("JANE SMITH").build())?;
+//! #     }
+//! #     batch.finish()?;
+//! #     file.finish()?;
+//! #     let output = String::from_utf8(writer.into_inner())?;
+//! #     // Give the second entry's routing number a bad check digit.
+//! #     let mut lines: Vec<String> = output.lines().map(str::to_owned).collect();
+//! #     lines[3].replace_range(3..12, "021000022");
+//! #     Ok(lines.join("\n"))
+//! # }
+//! # let ach = sample()?;
+//! use nacha::IssueKind;
+//!
+//! assert!(nacha::File::read(ach.as_bytes()).is_err());
+//!
+//! let file = nacha::File::read_lenient(ach.as_bytes())?;
+//! let batch = &file.batches[0];
+//! assert_eq!(batch.entries.len(), 1);
+//! for unread in &batch.unread_entries {
+//!     let trace: u64 = unread.detail_field("trace_number")?;
+//!     let amount: u64 = unread.detail_field("amount")?;
+//!     println!("entry {trace:015} ({amount} cents) needs review: {}", unread.error);
+//! }
+//! let issues = file.validate();
+//! assert_eq!(issues.len(), 1);
+//! assert!(matches!(issues[0].kind, IssueKind::UnreadEntry { .. }));
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! The file header, batch headers and controls must still decode, and every
+//! line must be a NACHA record.
+//!
 //! # Returns
 //!
 //! A return entry has a "returned" transaction code (x1 or x6, such as 21 or
@@ -481,7 +539,7 @@ pub use codes::{
     AccountKind, ChangeCode, ContestedReturnCode, DishonoredReturnCode, REVERSAL,
     RefusedChangeCode, ReturnReasonCode, ServiceClassCode, StandardEntryClass, TransactionCode,
 };
-pub use entry::{Entry, SpecialAddendum};
+pub use entry::{Entry, SpecialAddendum, UnreadEntry};
 pub use error::Error;
 pub use file::{Batch, File};
 pub use reader::{Entries, Reader};

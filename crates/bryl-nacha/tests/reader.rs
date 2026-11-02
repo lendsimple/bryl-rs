@@ -1,6 +1,6 @@
 //! Reading: structured reading and `File::read` (`structured`), flat
-//! iteration (`flat`), read errors (`errors`), and `File::validate`
-//! (`validate`).
+//! iteration (`flat`), read errors (`errors`), `File::validate`
+//! (`validate`), and lenient reading (`lenient`).
 
 mod common;
 
@@ -525,5 +525,146 @@ mod validate {
                 filler: 3
             }]
         );
+    }
+}
+
+mod lenient {
+    use super::*;
+    use nacha::{ServiceClassCode, Writer};
+    use pretty_assertions::assert_eq;
+
+    /// Two credits and an R01 return in one batch (lines 3, 4, and 5-6).
+    fn three_entries() -> String {
+        let mut writer = Writer::new(Vec::new());
+        let mut file = writer.begin_file(file_params()).unwrap();
+        let mut batch = file
+            .begin_batch(batch_params(ServiceClassCode::MixedDebitsAndCredits))
+            .unwrap();
+        for amount in [1000, 2000] {
+            batch
+                .entry(entry_params(TransactionCode::CheckingCredit, amount, &[]))
+                .unwrap();
+        }
+        batch
+            .entry(return_entry_params(ReturnReasonCode::InsufficientFunds))
+            .unwrap();
+        batch.finish().unwrap();
+        file.finish().unwrap();
+        String::from_utf8(writer.into_inner()).unwrap()
+    }
+
+    /// Entry 2's routing number gets a bad check digit (091000019 ->
+    /// 091000018) and entry 3's return an unknown reason code (R01 -> R98).
+    fn damaged() -> String {
+        let output = three_entries();
+        let mut lines: Vec<String> = output.lines().map(str::to_owned).collect();
+        assert!(lines[3].starts_with("622091000019"));
+        lines[3].replace_range(3..12, "091000018");
+        assert!(lines[5].starts_with("799R01"));
+        lines[5].replace_range(3..6, "R98");
+        lines.join("\n") + "\n"
+    }
+
+    #[test]
+    fn strict_reading_fails() {
+        let err = File::read(damaged().as_bytes()).unwrap_err();
+        assert_eq!(err.location, Location::Line(4));
+    }
+
+    #[test]
+    fn lenient_reading_keeps_the_other_entries() {
+        let input = damaged();
+        let file = File::read_lenient(input.as_bytes()).unwrap();
+        let batch = &file.batches[0];
+        assert_eq!(batch.entries.len(), 1);
+        assert_eq!(batch.entries[0].detail.amount, 1000);
+
+        let [bad_routing, bad_code] = &batch.unread_entries[..] else {
+            panic!(
+                "expected two unread entries, got {:?}",
+                batch.unread_entries
+            );
+        };
+        let lines: Vec<&str> = input.lines().collect();
+        assert_eq!(bad_routing.location, Location::Line(4));
+        assert_eq!(bad_routing.error_location, Location::Line(4));
+        assert_eq!(bad_routing.lines, [lines[3].as_bytes()]);
+        assert!(bad_routing.error.field_kind().is_some());
+        assert_eq!(bad_routing.detail_field::<u64>("amount"), Ok(2000));
+
+        // The detail decodes but its return addendum does not; the entry is
+        // kept whole.
+        assert_eq!(bad_code.location, Location::Line(5));
+        assert_eq!(bad_code.error_location, Location::Line(6));
+        assert_eq!(bad_code.lines, [lines[4].as_bytes(), lines[5].as_bytes()]);
+        assert_eq!(
+            bad_code.detail_field::<TransactionCode>("transaction_code"),
+            Ok(TransactionCode::CheckingReturnedDebit)
+        );
+
+        let traces: Vec<u64> = [bad_routing, bad_code]
+            .iter()
+            .map(|unread| unread.detail_field("trace_number").unwrap())
+            .collect();
+        assert_eq!(
+            file.validate(),
+            [
+                Issue {
+                    batch_number: Some(1),
+                    trace_number: Some(traces[0]),
+                    kind: IssueKind::UnreadEntry {
+                        location: Location::Line(4),
+                        error: bad_routing.error.clone(),
+                    },
+                },
+                Issue {
+                    batch_number: Some(1),
+                    trace_number: Some(traces[1]),
+                    kind: IssueKind::UnreadEntry {
+                        location: Location::Line(6),
+                        error: bad_code.error.clone(),
+                    },
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn readable_files_read_the_same() {
+        let output = three_entries();
+        let strict = File::read(output.as_bytes()).unwrap();
+        assert_eq!(File::read_lenient(output.as_bytes()).unwrap(), strict);
+        assert_eq!(strict.batches[0].unread_entries, []);
+    }
+
+    #[test]
+    fn bad_field_of_an_unread_entry_reports_its_error() {
+        let file = File::read_lenient(damaged().as_bytes()).unwrap();
+        let unread = &file.batches[0].unread_entries[0];
+        let err = unread
+            .detail_field::<nacha::RoutingNumber>("receiving_dfi")
+            .unwrap_err();
+        assert_eq!(&err, &unread.error);
+    }
+
+    #[test]
+    fn structural_problems_still_fail() {
+        let output = three_entries();
+        let mut lines: Vec<String> = output.lines().map(str::to_owned).collect();
+        // A bad routing number in the file header.
+        lines[0].replace_range(3..13, " 091000018");
+        assert!(File::read_lenient(lines.join("\n").as_bytes()).is_err());
+
+        let mut lines: Vec<String> = output.lines().map(str::to_owned).collect();
+        // A batch control that is not a number.
+        lines[6].replace_range(4..10, "XXXXXX");
+        let err = File::read_lenient(lines.join("\n").as_bytes()).unwrap_err();
+        assert_eq!(err.location, Location::Line(7));
+
+        let mut lines: Vec<String> = output.lines().map(str::to_owned).collect();
+        // An unknown record type.
+        lines[3].replace_range(0..1, "4");
+        let err = File::read_lenient(lines.join("\n").as_bytes()).unwrap_err();
+        assert!(matches!(err.kind, ReadErrorKind::UnknownRecord(_)));
     }
 }

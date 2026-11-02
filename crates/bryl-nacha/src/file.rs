@@ -5,7 +5,7 @@ use std::io::BufRead;
 
 use bryl::read::ReadError;
 
-use crate::entry::Entry;
+use crate::entry::{Entry, UnreadEntry};
 use crate::reader::Reader;
 use crate::records::{BatchControl, BatchHeader, FileControl, FileHeader};
 use crate::totals::Totals;
@@ -31,6 +31,9 @@ pub struct Batch {
     pub header: BatchHeader,
     /// Entries with their addenda.
     pub entries: Vec<Entry>,
+    /// Entries that [`File::read_lenient`] could not decode; always empty
+    /// after [`File::read`].
+    pub unread_entries: Vec<UnreadEntry>,
     /// The batch control.
     pub control: BatchControl,
 }
@@ -48,6 +51,24 @@ impl File {
         Reader::new(input).read_file()
     }
 
+    /// Parses a whole file like [`File::read`], but keeps each entry whose
+    /// detail or addenda fail to decode (a routing number with a bad check
+    /// digit, a code this crate does not know) in
+    /// [`Batch::unread_entries`] instead of failing, so the rest of the file
+    /// can be processed. [`File::validate`] reports one
+    /// [`IssueKind::UnreadEntry`] for each.
+    ///
+    /// The file header, batch headers and controls must still decode, and
+    /// every line must be a NACHA record.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first record outside an entry that is missing, out of
+    /// place or invalid.
+    pub fn read_lenient<R: BufRead>(input: R) -> Result<Self, ReadError> {
+        Reader::new(input).read_file_lenient()
+    }
+
     /// Records in the file, excluding filler lines.
     pub fn record_count(&self) -> usize {
         2 + self
@@ -59,6 +80,11 @@ impl File {
                     .iter()
                     .map(|entry| 1 + entry.addenda_count())
                     .sum::<usize>()
+                    + batch
+                        .unread_entries
+                        .iter()
+                        .map(|unread| unread.lines.len())
+                        .sum::<usize>()
             })
             .sum::<usize>()
     }
@@ -66,6 +92,10 @@ impl File {
     /// Checks control totals, counts, batch header/control agreement, batch
     /// and entry rules, batch number and trace number order, and block
     /// padding. Returns every problem found.
+    ///
+    /// Each unread entry (see [`File::read_lenient`]) is reported as an
+    /// [`IssueKind::UnreadEntry`]. Its amount and codes are unknown, so the
+    /// control totals of its batch, and of the file, are not checked.
     pub fn validate(&self) -> Vec<Issue> {
         let mut issues = Vec::new();
         let mut file_totals = Totals::default();
@@ -103,13 +133,21 @@ impl File {
                 u64::from(self.control.block_count),
             ),
         ];
-        for (field, computed, recorded) in counts.into_iter().chain(control_fields(
+        let any_unread = self
+            .batches
+            .iter()
+            .any(|batch| !batch.unread_entries.is_empty());
+        let totals = control_fields(
             &file_totals,
             u64::from(self.control.entry_addenda_count),
             self.control.entry_hash,
             self.control.total_debit_amount,
             self.control.total_credit_amount,
-        )) {
+        );
+        for (field, computed, recorded) in counts
+            .into_iter()
+            .chain(totals.into_iter().filter(|_| !any_unread))
+        {
             if computed != recorded {
                 issues.push(file_issue(IssueKind::ControlMismatch {
                     field,
@@ -160,6 +198,16 @@ impl Batch {
             previous_trace = Some(trace);
             totals.add_entry(entry);
         }
+        for unread in &self.unread_entries {
+            issues.push(Issue {
+                batch_number,
+                trace_number: unread.detail_field("trace_number").ok(),
+                kind: IssueKind::UnreadEntry {
+                    location: unread.error_location,
+                    error: unread.error.clone(),
+                },
+            });
+        }
 
         let batch_issue = |kind| Issue {
             batch_number,
@@ -184,13 +232,17 @@ impl Batch {
                 issues.push(batch_issue(IssueKind::HeaderMismatch { field }));
             }
         }
+        let checked = self.unread_entries.is_empty();
         for (field, computed, recorded) in control_fields(
             &totals,
             u64::from(control.entry_addenda_count),
             control.entry_hash,
             control.total_debit_amount,
             control.total_credit_amount,
-        ) {
+        )
+        .into_iter()
+        .filter(|_| checked)
+        {
             if computed != recorded {
                 issues.push(batch_issue(IssueKind::ControlMismatch {
                     field,
