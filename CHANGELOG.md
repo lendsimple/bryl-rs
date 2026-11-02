@@ -8,6 +8,14 @@ and the crates follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- An optional `serde` feature in `bryl`, `bryl-nacha` and `bryl-metro2`.
+  Files, batches, entries, data records, records and segments serialize and
+  deserialize; code tables as their codes (`"22"`, `"R01"`, `"11"`);
+  `RoutingNumber`, `FileIdModifier` and `PaymentHistoryProfile` as their
+  text, checked again when deserialized; dates as ISO 8601. Fields fixed
+  by the format are left out. Issues, violations, `UnreadEntry` and
+  `bryl::Error` can be serialized but not deserialized.
+
 - `bryl-metro2` checks more CRRG 2020 rules: the header's reporter name
   and address are required (`HeaderRecord::validate`, checked by
   `Writer::begin_file` and reported by `File::validate` as `Issue::Header`);

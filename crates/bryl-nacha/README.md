@@ -73,6 +73,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   file and `File::validate` reports every problem. `File::read_lenient`
   keeps entries that fail to decode as `UnreadEntry` values instead of
   failing the file.
+- **Serde:** the optional `serde` feature serializes and deserializes
+  files and records, with codes as the codes in the file.
 - **Values:** `RoutingNumber` checks the ABA checksum; `TransactionCode::for_entry`
   picks a code from a signed amount.
 

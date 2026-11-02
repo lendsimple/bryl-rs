@@ -13,6 +13,7 @@ use crate::records::{BaseSegment, HeaderRecord, J1Segment, J2Segment, L1Segment}
 
 /// A rule broken by a record or segment.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum Violation {
     /// The account status requires a payment rating and none is reported.
@@ -126,6 +127,7 @@ pub enum Violation {
 /// CDIA's Credit Reporting Resource Guide (2020 edition). The guide also says
 /// alpha fields should be uppercase, which the writer does by default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum CharClass {
     /// Consumer name fields: letters, spaces and hyphens ("other than the
     /// hyphen, do not report special characters").

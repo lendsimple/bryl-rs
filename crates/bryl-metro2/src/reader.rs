@@ -20,6 +20,7 @@ use crate::records::{HeaderRecord, TrailerRecord};
 
 /// A header, data record or trailer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)] // records are read one at a time
 pub enum Metro2Record {
     /// The header record.

@@ -30,7 +30,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo doc --workspace --no-deps
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo doc --workspace --no-deps --all-features
       - name: Crate LICENSE copies match the root LICENSE
         run: |
           for license in crates/*/LICENSE; do
@@ -54,6 +55,7 @@ jobs:
       # crates/bryl/tests/ui match current stable rustc wording; regenerate
       # them with TRYBUILD=overwrite when a new release changes it.
       - run: cargo test --workspace
+      - run: cargo test --workspace --all-features
       # Nothing but `FileParams::now()` may need chrono's clock.
       - run: cargo test -p bryl-nacha --no-default-features
 
@@ -90,7 +92,7 @@ jobs:
       # rust-toolchain.toml selects stable, so name the toolchain explicitly.
       # Skip only the compile-error snapshot test (`ui`), whose expected
       # output follows current stable rustc wording.
-      - run: cargo +1.85 test --workspace -- --skip ui --exact
+      - run: cargo +1.85 test --workspace --all-features -- --skip ui --exact
 
   minimal-versions:
     name: Test (minimal dependency versions)
@@ -108,7 +110,7 @@ jobs:
       # allows, so the published floors in Cargo.toml stay honest. Only the
       # resolution needs nightly; the tests run on stable.
       - run: cargo +nightly update -Z direct-minimal-versions
-      - run: cargo +stable test --workspace
+      - run: cargo +stable test --workspace --all-features
 
   package-tests:
     name: Test (packaged crates)

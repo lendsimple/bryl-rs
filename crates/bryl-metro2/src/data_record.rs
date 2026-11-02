@@ -13,6 +13,7 @@ pub const MAX_RECORD_LENGTH: usize = 9999;
 
 /// One account: a base segment and its optional appended segments.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataRecord {
     /// The base segment.
     pub base: BaseSegment,
@@ -36,6 +37,7 @@ pub struct DataRecord {
 
 /// Any Metro 2 record or segment, for flat iteration.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum Segment {
     Header(HeaderRecord),
