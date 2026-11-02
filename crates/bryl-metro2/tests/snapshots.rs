@@ -161,6 +161,8 @@ fn statuses() -> Vec<DataRecord> {
             account_status: AccountStatus::PaidOrClosed,
             payment_rating: Some(PaymentRating::Past30),
             date_closed: Some(date(2020, 6, 30)),
+            // Rated 30 days late before it was paid (CRRG 2020 Field 25).
+            date_of_first_delinquency: Some(date(2020, 3, 15)),
             ..base()
         }),
     ]

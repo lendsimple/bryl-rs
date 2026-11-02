@@ -117,6 +117,8 @@
 //!     payment_rating: Some(PaymentRating::Past30),
 //!     current_balance: 0,
 //!     date_closed: Some(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()),
+//!     // When it first became 30 days late.
+//!     date_of_first_delinquency: Some(NaiveDate::from_ymd_opt(2023, 11, 30).unwrap()),
 //!     ..base()
 //! };
 //! assert_eq!(paid.validate(), Ok(()));
@@ -198,10 +200,13 @@
 //! - **Payment rating** against account status, as above.
 //! - **Amount past due** is 0 for statuses 11 (current) and 13 (paid or
 //!   closed).
-//! - **Date closed** is reported for status 13 (paid or closed)
-//!   ([`AccountStatus::requires_date_closed`]).
-//! - **Date of first delinquency** is reported for status 97 (charge-off)
-//!   ([`AccountStatus::requires_date_of_first_delinquency`]).
+//! - **Date closed** is reported for paid accounts, statuses 13 and 61-65
+//!   ([`AccountStatus::requires_date_closed`]), and blank for a charged-off
+//!   (97) installment or mortgage account.
+//! - **Date of first delinquency** is reported, and only reported, by the
+//!   CRRG's hierarchy ([`BaseSegment::requires_date_of_first_delinquency`]):
+//!   delinquent and derogatory statuses, paid accounts that were late, and
+//!   current accounts with a bankruptcy or receivership indicator.
 //! - **Payment history profile:** each month is a [`PaymentHistoryCode`] or
 //!   a space, and `B` (no history) may only be followed by `B` or spaces.
 //! - **Characters** ([`CharClass`]): names allow letters, spaces and
@@ -311,12 +316,11 @@
 //!   moov-io/metro2's `ValidatePaymentRating`, Upstart's `metro_2` gem and
 //!   The Mortgage Office's documentation agree; not yet checked against the
 //!   CRRG text.
-//! - **Date closed and date of first delinquency rules**
-//!   ([`AccountStatus::requires_date_closed`],
-//!   [`AccountStatus::requires_date_of_first_delinquency`]): Switch Labs'
-//!   Metro 2 field reference and the [m2reporter.com Metro 2
-//!   FAQ](https://www.m2reporter.com/help/faq.html) (questions 34 and 39)
-//!   agree; not yet checked against the CRRG text.
+//! - **Date closed** ([`validate_date_closed`]): CRRG 2020 Field 26
+//!   (page 4-17) and Frequently Asked Questions 34 and 39.
+//! - **Date of first delinquency**
+//!   ([`BaseSegment::requires_date_of_first_delinquency`]): CRRG 2020
+//!   Field 25 (page 4-16).
 //! - **Account status descriptions** ([`AccountStatus`]): Oracle Financial
 //!   Services Lending & Leasing and The Mortgage Office documentation, and the
 //!   `metro_2` gem.
@@ -329,10 +333,7 @@
 //!
 //! Rules that need the CRRG text before they are checked, because only one
 //! public source states them or the sources disagree: the header record's
-//! required fields; the date closed for other closing statuses, and whether
-//! it must be blank for open accounts (a status 11 account can be closed
-//! with a balance due); the date of first delinquency for other delinquent
-//! statuses; the special comment and compliance condition codes each status
+//! required fields; the special comment and compliance condition codes each status
 //! allows; ECOA and consumer information indicator rules; and when a K1
 //! segment is required.
 

@@ -156,95 +156,219 @@ mod amount_past_due {
 
 mod dates {
     use super::*;
+    use metro2::{ConsumerInformationIndicator as Cii, PortfolioType};
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn date_closed_required_for_paid_or_closed() {
-        let status = AccountStatus::PaidOrClosed;
-        assert_eq!(
-            validate_date_closed(status, Some(date(2020, 6, 30))),
-            Ok(())
-        );
-        let err = validate_date_closed(status, None).unwrap_err();
-        assert_eq!(err, Violation::DateClosedRequired { status });
-        assert!(err.to_string().contains("'13'"), "{err}");
-    }
-
-    #[test]
-    fn date_closed_optional_for_other_statuses() {
-        // A current account may be closed with a balance still due.
-        for status in [AccountStatus::Current, AccountStatus::ChargeOff] {
-            assert_eq!(validate_date_closed(status, None), Ok(()), "{status:?}");
-            assert_eq!(
-                validate_date_closed(status, Some(date(2020, 6, 30))),
-                Ok(()),
-                "{status:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn date_of_first_delinquency_required_for_charge_off() {
-        let status = AccountStatus::ChargeOff;
-        assert_eq!(
-            validate_date_of_first_delinquency(status, Some(date(2020, 1, 15))),
-            Ok(())
-        );
-        let err = validate_date_of_first_delinquency(status, None).unwrap_err();
-        assert_eq!(err, Violation::DateOfFirstDelinquencyRequired { status });
-        assert!(err.to_string().contains("'97'"), "{err}");
-    }
-
-    #[test]
-    fn date_of_first_delinquency_optional_for_other_statuses() {
-        for status in [AccountStatus::Current, AccountStatus::Dpd30] {
-            assert_eq!(
-                validate_date_of_first_delinquency(status, None),
-                Ok(()),
-                "{status:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn requirements_by_status() {
-        let closed: Vec<_> = AccountStatus::ALL
+    fn date_closed_required_for_paid_accounts() {
+        // CRRG 2020 FAQ 39: 13 and 61-65.
+        let paid: Vec<_> = AccountStatus::ALL
             .iter()
             .copied()
             .filter(|status| status.requires_date_closed())
             .collect();
-        assert_eq!(closed, [AccountStatus::PaidOrClosed]);
-        let delinquent: Vec<_> = AccountStatus::ALL
-            .iter()
-            .copied()
-            .filter(|status| status.requires_date_of_first_delinquency())
-            .collect();
-        assert_eq!(delinquent, [AccountStatus::ChargeOff]);
+        assert_eq!(
+            paid,
+            [
+                AccountStatus::PaidOrClosed,
+                AccountStatus::PaidVoluntarySurrender,
+                AccountStatus::PaidCollection,
+                AccountStatus::PaidRepossession,
+                AccountStatus::PaidChargeOff,
+                AccountStatus::PaidForeclosureStarted,
+            ]
+        );
+        for status in paid {
+            let installment = PortfolioType::Installment;
+            assert_eq!(
+                validate_date_closed(status, installment, Some(date(2020, 6, 30))),
+                Ok(())
+            );
+            let err = validate_date_closed(status, installment, None).unwrap_err();
+            assert_eq!(err, Violation::DateClosedRequired { status });
+        }
     }
 
     #[test]
-    fn data_record_reports_missing_dates() {
+    fn date_closed_zero_for_installment_and_mortgage_charge_offs() {
+        // CRRG 2020 FAQ 34(a).
+        let status = AccountStatus::ChargeOff;
+        for portfolio_type in [PortfolioType::Installment, PortfolioType::Mortgage] {
+            assert_eq!(validate_date_closed(status, portfolio_type, None), Ok(()));
+            assert_eq!(
+                validate_date_closed(status, portfolio_type, Some(date(2020, 6, 30))),
+                Err(Violation::DateClosedNotAllowed {
+                    status,
+                    portfolio_type
+                })
+            );
+        }
+        // A revolving charge-off reports the date closed to further purchases.
+        for portfolio_type in [
+            PortfolioType::Revolving,
+            PortfolioType::Open,
+            PortfolioType::LineOfCredit,
+        ] {
+            assert_eq!(
+                validate_date_closed(status, portfolio_type, Some(date(2020, 6, 30))),
+                Ok(())
+            );
+            assert_eq!(validate_date_closed(status, portfolio_type, None), Ok(()));
+        }
+    }
+
+    #[test]
+    fn date_closed_optional_for_open_statuses() {
+        // A current revolving account may be closed with a balance due
+        // (CRRG 2020 FAQ 40).
+        for closed in [None, Some(date(2020, 6, 30))] {
+            assert_eq!(
+                validate_date_closed(AccountStatus::Current, PortfolioType::Revolving, closed),
+                Ok(())
+            );
+        }
+    }
+
+    /// Whether the CRRG 2020 Field 25 hierarchy requires a date of first
+    /// delinquency.
+    fn dofd_required(
+        status: AccountStatus,
+        rating: Option<PaymentRating>,
+        cii: Option<Cii>,
+    ) -> bool {
+        BaseSegment {
+            account_status: status,
+            payment_rating: rating,
+            consumer_information_indicator: cii,
+            ..base()
+        }
+        .requires_date_of_first_delinquency()
+    }
+
+    #[test]
+    fn dofd_required_for_delinquent_and_derogatory_statuses() {
+        // Rule 1.
+        let statuses: Vec<_> = AccountStatus::ALL
+            .iter()
+            .filter(|status| status.requires_date_of_first_delinquency())
+            .map(AccountStatus::as_code)
+            .collect();
+        assert_eq!(
+            statuses,
+            [
+                "61", "62", "63", "64", "65", "71", "78", "80", "82", "83", "84", "88", "89", "93",
+                "94", "95", "96", "97"
+            ]
+        );
+        assert!(dofd_required(AccountStatus::ChargeOff, None, None));
+        assert!(!dofd_required(AccountStatus::Current, None, None));
+        assert!(!dofd_required(AccountStatus::DeleteAccount, None, None));
+    }
+
+    #[test]
+    fn dofd_required_for_paid_accounts_that_were_late() {
+        // Rule 2: 05 and 13 with a delinquent payment rating.
+        for status in [AccountStatus::PaidOrClosed, AccountStatus::Transferred] {
+            for &rating in PaymentRating::ALL {
+                let late = rating != PaymentRating::Current;
+                assert_eq!(
+                    dofd_required(status, Some(rating), None),
+                    late,
+                    "{status:?} {rating:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dofd_required_for_bankruptcy_on_current_accounts() {
+        // Rule 3: bankruptcy or personal receivership on a current account.
+        let bankruptcy = [
+            Cii::BankruptcyCh7Petition,
+            Cii::BankruptcyCh13Discharged,
+            Cii::UndesignatedChapter,
+            Cii::PersonalReceivership,
+            Cii::RescissionReaffirmation,
+        ];
+        for cii in bankruptcy {
+            assert!(
+                dofd_required(AccountStatus::Current, None, Some(cii)),
+                "{cii:?}"
+            );
+            assert!(
+                dofd_required(
+                    AccountStatus::PaidOrClosed,
+                    Some(PaymentRating::Current),
+                    Some(cii)
+                ),
+                "{cii:?}"
+            );
+        }
+        for cii in [
+            Cii::BankruptcyCh7Dismissed,
+            Cii::RemovePriorBankruptcy,
+            Cii::ReaffirmationDebt,
+            Cii::CannotLocateConsumer,
+            Cii::LeaseAssumption,
+        ] {
+            assert!(
+                !dofd_required(AccountStatus::Current, None, Some(cii)),
+                "{cii:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn dofd_violations() {
+        let charge_off = BaseSegment {
+            account_status: AccountStatus::ChargeOff,
+            amount_past_due: 1500,
+            ..base()
+        };
+        assert_eq!(
+            validate_date_of_first_delinquency(&charge_off),
+            Err(Violation::DateOfFirstDelinquencyRequired {
+                status: AccountStatus::ChargeOff
+            })
+        );
+        let charge_off = BaseSegment {
+            date_of_first_delinquency: Some(date(2020, 1, 15)),
+            ..charge_off
+        };
+        assert_eq!(validate_date_of_first_delinquency(&charge_off), Ok(()));
+
+        // A current account carries no date of first delinquency.
+        let current = BaseSegment {
+            date_of_first_delinquency: Some(date(2020, 1, 15)),
+            ..base()
+        };
+        let err = validate_date_of_first_delinquency(&current).unwrap_err();
+        assert_eq!(
+            err,
+            Violation::DateOfFirstDelinquencyNotAllowed {
+                status: AccountStatus::Current
+            }
+        );
+        assert!(err.to_string().contains("'11'"), "{err}");
+    }
+
+    #[test]
+    fn data_record_reports_date_rules() {
         let paid = DataRecord::new(BaseSegment {
             account_status: AccountStatus::PaidOrClosed,
-            payment_rating: Some(PaymentRating::Current),
+            payment_rating: Some(PaymentRating::Past30),
             ..base()
         });
         assert_eq!(
             paid.validate(),
-            Err(vec![Violation::DateClosedRequired {
-                status: AccountStatus::PaidOrClosed
-            }])
-        );
-        let charged_off = DataRecord::new(BaseSegment {
-            account_status: AccountStatus::ChargeOff,
-            amount_past_due: 1500,
-            ..base()
-        });
-        assert_eq!(
-            charged_off.validate(),
-            Err(vec![Violation::DateOfFirstDelinquencyRequired {
-                status: AccountStatus::ChargeOff
-            }])
+            Err(vec![
+                Violation::DateClosedRequired {
+                    status: AccountStatus::PaidOrClosed
+                },
+                Violation::DateOfFirstDelinquencyRequired {
+                    status: AccountStatus::PaidOrClosed
+                },
+            ])
         );
     }
 }

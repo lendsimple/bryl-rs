@@ -79,7 +79,7 @@ fn base() -> impl Strategy<Value = BaseSegment> {
                     } else {
                         past_due
                     };
-                BaseSegment::builder()
+                let base = BaseSegment::builder()
                     .identification_number("FURNISHER")
                     .consumer_account_number(account)
                     .portfolio_type(portfolio)
@@ -95,18 +95,20 @@ fn base() -> impl Strategy<Value = BaseSegment> {
                     .current_balance(balance)
                     .amount_past_due(past_due)
                     .date_of_account_information(as_of)
-                    // Paid accounts report when they closed, and charge-offs
-                    // when they first became delinquent.
+                    // Paid accounts report when they closed; charged-off
+                    // installment and mortgage accounts are not closed.
                     .maybe_date_closed(if status.requires_date_closed() {
                         closed.or(Some(as_of))
+                    } else if status == AccountStatus::ChargeOff
+                        && matches!(
+                            portfolio,
+                            PortfolioType::Installment | PortfolioType::Mortgage
+                        )
+                    {
+                        None
                     } else {
                         closed
                     })
-                    .maybe_date_of_first_delinquency(
-                        status
-                            .requires_date_of_first_delinquency()
-                            .then_some(opened),
-                    )
                     .surname(surname)
                     .first_name(first)
                     .social_security_number(ssn)
@@ -117,7 +119,15 @@ fn base() -> impl Strategy<Value = BaseSegment> {
                     .city("CITY")
                     .state("CA")
                     .zip_code("90210")
-                    .build()
+                    .build();
+                // Delinquent and derogatory accounts date their first
+                // delinquency; others must not.
+                BaseSegment {
+                    date_of_first_delinquency: base
+                        .requires_date_of_first_delinquency()
+                        .then_some(opened),
+                    ..base
+                }
             },
         )
 }

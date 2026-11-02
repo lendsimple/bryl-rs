@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 use thiserror::Error;
 
-use crate::codes::{AccountStatus, PaymentRating};
+use crate::codes::{AccountStatus, ConsumerInformationIndicator, PaymentRating, PortfolioType};
 use crate::data_record::DataRecord;
 use crate::profile::PaymentHistoryError;
 use crate::records::{BaseSegment, J1Segment, J2Segment, L1Segment};
@@ -40,10 +40,27 @@ pub enum Violation {
         /// Account status.
         status: AccountStatus,
     },
-    /// The account status requires a date of first delinquency and none is
-    /// reported.
+    /// The date closed must be zero filled: a charged-off installment or
+    /// mortgage account is not closed.
+    #[error("Date closed must be blank for status '{status}' on portfolio type '{portfolio_type}'")]
+    DateClosedNotAllowed {
+        /// Account status.
+        status: AccountStatus,
+        /// Portfolio type.
+        portfolio_type: PortfolioType,
+    },
+    /// The account requires a date of first delinquency and none is reported
+    /// (see [`BaseSegment::requires_date_of_first_delinquency`]).
     #[error("Account status '{status}' requires a date of first delinquency")]
     DateOfFirstDelinquencyRequired {
+        /// Account status.
+        status: AccountStatus,
+    },
+    /// A date of first delinquency is reported for an account that has none
+    /// (see [`BaseSegment::requires_date_of_first_delinquency`]), such as a
+    /// delinquent account that is current again.
+    #[error("Date of first delinquency must be blank for account status '{status}'")]
+    DateOfFirstDelinquencyNotAllowed {
         /// Account status.
         status: AccountStatus,
     },
@@ -174,63 +191,158 @@ impl AccountStatus {
         )
     }
 
-    /// True for status 13 (paid or closed), which must report the date
-    /// closed: the date paid for installment and mortgage accounts, the date
-    /// closed to further use for revolving accounts and lines of credit.
+    /// True for the paid statuses that must report the date closed: 13
+    /// (paid or closed) and 61-65 (paid after a voluntary surrender,
+    /// collection, repossession, charge-off or foreclosure). The date closed
+    /// is the date paid in full for installment and mortgage accounts, and
+    /// the date closed to further charges for revolving accounts and lines
+    /// of credit.
     ///
-    /// Not yet checked against the CRRG itself. Two independent sources
-    /// agree: Switch Labs' Metro 2 field reference ("Required for status 13
-    /// (Paid/Closed)") and the m2reporter.com Metro 2 FAQ (question 39). Other
-    /// closing statuses may require it too, but the sources disagree, so
-    /// they are not checked.
+    /// CRRG 2020, Frequently Asked Questions 34(b) and 39, and Field 26
+    /// (page 4-17).
     pub const fn requires_date_closed(self) -> bool {
-        matches!(self, Self::PaidOrClosed)
+        matches!(
+            self,
+            Self::PaidOrClosed
+                | Self::PaidVoluntarySurrender
+                | Self::PaidCollection
+                | Self::PaidRepossession
+                | Self::PaidChargeOff
+                | Self::PaidForeclosureStarted
+        )
     }
 
-    /// True for status 97 (charge-off), which must report the date of first
-    /// delinquency: the date of the first 30-day delinquency that led to the
-    /// charge-off, which starts the FCRA's seven-year reporting period.
+    /// True for the delinquent and derogatory statuses whose date of first
+    /// delinquency is the first 30-day delinquency that led to the status:
+    /// 61-65, 71, 78, 80, 82-84, 88, 89 and 93-97. This is the first step of
+    /// the hierarchy in [`BaseSegment::requires_date_of_first_delinquency`].
     ///
-    /// Not yet checked against the CRRG itself. Two independent sources
-    /// agree: the m2reporter.com Metro 2 FAQ (question 34) and Switch Labs'
-    /// Metro 2 field reference ("Required for derogatory accounts"). Other
-    /// delinquent statuses likely require it too, but only one source says
-    /// so, so they are not checked.
+    /// CRRG 2020, Field 25 (page 4-16).
     pub const fn requires_date_of_first_delinquency(self) -> bool {
-        matches!(self, Self::ChargeOff)
+        matches!(
+            self,
+            Self::PaidVoluntarySurrender
+                | Self::PaidCollection
+                | Self::PaidRepossession
+                | Self::PaidChargeOff
+                | Self::PaidForeclosureStarted
+                | Self::Dpd30
+                | Self::Dpd60
+                | Self::Dpd90
+                | Self::Dpd120
+                | Self::Dpd150
+                | Self::Dpd180
+                | Self::GovernmentClaimFiled
+                | Self::DeedReceived
+                | Self::Collections
+                | Self::ForeclosureCompleted
+                | Self::VoluntarySurrender
+                | Self::Repossession
+                | Self::ChargeOff
+        )
     }
 }
 
-/// Checks that the date closed is reported for the statuses in
-/// [`AccountStatus::requires_date_closed`].
+impl ConsumerInformationIndicator {
+    /// True for a bankruptcy petition, discharge or reaffirmation rescinded
+    /// (A-H, Z, V) and personal receivership (1A): the indicators whose
+    /// petition or notification date is the date of first delinquency of a
+    /// current account, for purging.
+    ///
+    /// CRRG 2020, Field 25 (page 4-16).
+    pub const fn dates_first_delinquency(self) -> bool {
+        matches!(
+            self,
+            Self::BankruptcyCh7Petition
+                | Self::BankruptcyCh11Petition
+                | Self::BankruptcyCh12Petition
+                | Self::BankruptcyCh13Petition
+                | Self::BankruptcyCh7Discharged
+                | Self::BankruptcyCh11Discharged
+                | Self::BankruptcyCh12Discharged
+                | Self::BankruptcyCh13Discharged
+                | Self::UndesignatedChapter
+                | Self::RescissionReaffirmation
+                | Self::PersonalReceivership
+        )
+    }
+}
+
+impl BaseSegment {
+    /// True if the account must report a date of first delinquency, by the
+    /// CRRG's three-step hierarchy; otherwise the date must be blank:
+    ///
+    /// 1. a delinquent or derogatory status
+    ///    ([`AccountStatus::requires_date_of_first_delinquency`]);
+    /// 2. status 05 or 13 with a payment rating other than 0 (current);
+    /// 3. a current account (status 11, or 05 or 13 rated 0) with a
+    ///    bankruptcy or receivership indicator
+    ///    ([`ConsumerInformationIndicator::dates_first_delinquency`]).
+    ///
+    /// CRRG 2020, Field 25 (page 4-16).
+    pub fn requires_date_of_first_delinquency(&self) -> bool {
+        let status = self.account_status;
+        let paid = matches!(
+            status,
+            AccountStatus::Transferred | AccountStatus::PaidOrClosed
+        );
+        let rated_current = self.payment_rating == Some(PaymentRating::Current);
+        let late = paid && self.payment_rating.is_some() && !rated_current;
+        let current = status == AccountStatus::Current || (paid && rated_current);
+        let bankruptcy = self
+            .consumer_information_indicator
+            .is_some_and(ConsumerInformationIndicator::dates_first_delinquency);
+        status.requires_date_of_first_delinquency() || late || (current && bankruptcy)
+    }
+}
+
+/// Checks the date closed against the account status: required for the
+/// statuses in [`AccountStatus::requires_date_closed`], and blank for a
+/// charge-off (97) on an installment or mortgage account (CRRG 2020,
+/// Frequently Asked Question 34(a)).
 ///
 /// # Errors
 ///
-/// Returns [`Violation::DateClosedRequired`] otherwise.
+/// Returns [`Violation::DateClosedRequired`] or
+/// [`Violation::DateClosedNotAllowed`].
 pub fn validate_date_closed(
     status: AccountStatus,
+    portfolio_type: PortfolioType,
     date_closed: Option<NaiveDate>,
 ) -> Result<(), Violation> {
     if status.requires_date_closed() && date_closed.is_none() {
         return Err(Violation::DateClosedRequired { status });
     }
+    let closed_portfolio = matches!(
+        portfolio_type,
+        PortfolioType::Installment | PortfolioType::Mortgage
+    );
+    if status == AccountStatus::ChargeOff && closed_portfolio && date_closed.is_some() {
+        return Err(Violation::DateClosedNotAllowed {
+            status,
+            portfolio_type,
+        });
+    }
     Ok(())
 }
 
-/// Checks that the date of first delinquency is reported for the statuses in
-/// [`AccountStatus::requires_date_of_first_delinquency`].
+/// Checks the date of first delinquency: reported if
+/// [`BaseSegment::requires_date_of_first_delinquency`], blank otherwise.
 ///
 /// # Errors
 ///
-/// Returns [`Violation::DateOfFirstDelinquencyRequired`] otherwise.
-pub fn validate_date_of_first_delinquency(
-    status: AccountStatus,
-    date_of_first_delinquency: Option<NaiveDate>,
-) -> Result<(), Violation> {
-    if status.requires_date_of_first_delinquency() && date_of_first_delinquency.is_none() {
-        return Err(Violation::DateOfFirstDelinquencyRequired { status });
+/// Returns [`Violation::DateOfFirstDelinquencyRequired`] or
+/// [`Violation::DateOfFirstDelinquencyNotAllowed`].
+pub fn validate_date_of_first_delinquency(base: &BaseSegment) -> Result<(), Violation> {
+    let status = base.account_status;
+    match (
+        base.requires_date_of_first_delinquency(),
+        base.date_of_first_delinquency,
+    ) {
+        (true, None) => Err(Violation::DateOfFirstDelinquencyRequired { status }),
+        (false, Some(_)) => Err(Violation::DateOfFirstDelinquencyNotAllowed { status }),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// Checks the payment rating against the account status: required (any
@@ -301,9 +413,8 @@ impl BaseSegment {
         let mut violations: Vec<Violation> = [
             validate_payment_rating(self.account_status, self.payment_rating).err(),
             validate_amount_past_due(self.account_status, self.amount_past_due).err(),
-            validate_date_closed(self.account_status, self.date_closed).err(),
-            validate_date_of_first_delinquency(self.account_status, self.date_of_first_delinquency)
-                .err(),
+            validate_date_closed(self.account_status, self.portfolio_type, self.date_closed).err(),
+            validate_date_of_first_delinquency(self).err(),
             validate_payment_history(self.payment_history_profile.as_str())
                 .err()
                 .map(Violation::PaymentHistory),
