@@ -47,6 +47,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .date_of_account_information(day)
             .maybe_date_closed(status.requires_date_closed().then_some(day))
+            .maybe_date_of_first_delinquency(
+                status
+                    .requires_date_of_first_delinquency()
+                    .then(|| NaiveDate::from_ymd_opt(2023, 11, 30))
+                    .flatten(),
+            )
             .surname(surname)
             .first_name("ALEX")
             .ecoa_code(EcoaCode::Joint)
